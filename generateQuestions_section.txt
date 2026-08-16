@@ -1,0 +1,173 @@
+function generateQuestions({
+  subject,
+  topic,
+  level,
+  difficulty,
+  questionType,
+  count,
+}) {
+  const requestedCount = Math.min(
+    Math.max(
+      parseInt(count, 10) || 5,
+      1
+    ),
+    20
+  );
+
+  const questions = [];
+
+  const used = new Set();
+
+  let attempts = 0;
+
+/*
+=========================================================
+ SMART GENERATION LOOP
+ --------------------------------------------------------
+ - Keeps trying to reach the requested count
+ - Prevents exact duplicates
+ - Gives generators enough attempts
+ - Does not depend on the user answering questions
+ - Every Generate request is independent
+=========================================================
+*/
+
+const maxAttempts = Math.max(
+  requestedCount * 250,
+  500
+);
+
+while (
+  questions.length < requestedCount &&
+  attempts < maxAttempts
+) {
+  attempts++;
+
+  let generated;
+
+  /*
+    Mathematics
+  */
+
+  if (
+    String(subject)
+      .toLowerCase() ===
+      "mathematics" ||
+    String(subject)
+      .toLowerCase() ===
+      "math"
+  ) {
+    generated =
+      generateMath(
+        topic,
+        difficulty,
+        level
+      );
+  }
+
+  /*
+    All other subjects
+  */
+
+  else {
+    generated =
+      generateScience(
+        subject,
+        topic,
+        difficulty,
+        level
+      );
+  }
+
+  /*
+    Generator failed.
+    Try again instead of stopping.
+  */
+
+  if (!generated) {
+    continue;
+  }
+
+  /*
+    Convert to the requested
+    question type.
+  */
+
+  generated =
+    convertQuestion(
+      generated,
+      questionType
+    );
+
+  /*
+    Duplicate detection happens
+    AFTER conversion so that the
+    actual displayed question is
+    what gets compared.
+  */
+
+  const normalized =
+    cleanText(
+      generated.question
+    );
+
+  if (
+    used.has(normalized)
+  ) {
+    continue;
+  }
+
+  used.add(normalized);
+
+  /*
+    Store the generated question.
+  */
+
+  questions.push({
+    id: makeId(),
+
+    subject,
+
+    topic:
+      generated.topic ||
+      topic,
+
+    level,
+
+    difficulty,
+
+    questionType:
+      generated.questionType ||
+      questionType ||
+      "Multiple Choice",
+
+    question:
+      generated.question,
+
+    options:
+      generated.options ||
+      [],
+
+    answer:
+      generated.answer,
+
+    explanation:
+      generated.explanation ||
+      "Review the underlying concept and work through the problem carefully.",
+
+    learningObjective:
+      generated.learningObjective ||
+      "Apply the relevant concept correctly.",
+  });
+}
+
+  return questions;
+}
+
+/* ========================================================
+   EXPORT
+======================================================== */
+
+module.exports = {
+  generateQuestions,
+};

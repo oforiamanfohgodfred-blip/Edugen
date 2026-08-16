@@ -1,1322 +1,5 @@
-const crypto = require("crypto");
 
-/*
-=========================================================
- EduGen Dynamic Question Engine v2
- --------------------------------------------------------
- - No hardcoded question repetition
- - Difficulty-aware generation
- - True/False support
- - Problem Solving support
- - Word Problem support
- - Large Expert numbers
- - Expanded Mathematics
- - Expanded Biology
- - Expanded Physics
- - Expanded Chemistry
-=========================================================
-*/
-
-/* ========================================================
-   UTILITIES
-======================================================== */
-
-const randomInt = (min, max) =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
-
-const randomFloat = (min, max, decimals = 2) => {
-  const factor = 10 ** decimals;
-  return (
-    Math.round(
-      (Math.random() * (max - min) + min) * factor
-    ) / factor
-  );
-};
-
-const randomItem = (array) =>
-  array[Math.floor(Math.random() * array.length)];
-
-const shuffle = (array) => {
-  const result = [...array];
-
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-
-    [result[i], result[j]] = [
-      result[j],
-      result[i],
-    ];
-  }
-
-  return result;
-};
-
-const makeId = () =>
-  crypto.randomBytes(8).toString("hex");
-
-const fmt = (number, decimals = 2) => {
-  if (!Number.isFinite(Number(number))) {
-    return String(number);
-  }
-
-  const value = Number(number);
-
-  if (Number.isInteger(value)) {
-    return String(value);
-  }
-
-  return String(
-    Number(value.toFixed(decimals))
-  );
-};
-
-const cleanText = (text) =>
-  String(text)
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-
-/* ========================================================
-   DIFFICULTY HELPERS
-======================================================== */
-
-/* ========================================================
-   LEVEL + DIFFICULTY INTELLIGENCE
-======================================================== */
-
-/*
-=========================================================
- EduGen Difficulty System
- --------------------------------------------------------
- Difficulty is NOT just about larger numbers.
-
- Level:
- - JHS
- - SHS
- - University
-
- Difficulty:
- - Easy
- - Medium
- - Hard
- - Expert
-
- Expert prioritizes:
- - Multi-step reasoning
- - Multiple concepts
- - Indirect information
- - Interpretation
- - Common mistakes
- - Plausible distractors
- - Deeper problem solving
-=========================================================
-*/
-
-const difficultyRange = {
-  Easy: {
-    small: [2, 10],
-    medium: [10, 50],
-    large: [50, 500],
-  },
-
-  Medium: {
-    small: [5, 20],
-    medium: [20, 200],
-    large: [100, 2000],
-  },
-
-  Hard: {
-    small: [10, 50],
-    medium: [50, 1000],
-    large: [500, 10000],
-  },
-
-  Expert: {
-    small: [50, 500],
-    medium: [500, 10000],
-    large: [10000, 999999],
-  },
-};
-
-/*
-=========================================================
- ACADEMIC LEVEL PROFILES
-=========================================================
-*/
-
-const levelProfiles = {
-  JHS: {
-    name: "JHS",
-
-    reasoningDepth: {
-      Easy: 1,
-      Medium: 2,
-      Hard: 3,
-      Expert: 5,
-    },
-
-    maxSteps: {
-      Easy: 1,
-      Medium: 2,
-      Hard: 3,
-      Expert: 5,
-    },
-
-    expertStyle: [
-      "multi-step reasoning",
-      "hidden relationships",
-      "careful interpretation",
-      "common-mistake traps",
-      "indirect information",
-    ],
-  },
-
-  SHS: {
-    name: "SHS",
-
-    reasoningDepth: {
-      Easy: 1,
-      Medium: 2,
-      Hard: 4,
-      Expert: 6,
-    },
-
-    maxSteps: {
-      Easy: 1,
-      Medium: 2,
-      Hard: 4,
-      Expert: 6,
-    },
-
-    expertStyle: [
-      "multi-concept reasoning",
-      "indirect calculation",
-      "algebraic manipulation",
-      "interpretation of data",
-      "common-mistake traps",
-      "reverse reasoning",
-    ],
-  },
-
-  University: {
-    name: "University",
-
-    reasoningDepth: {
-      Easy: 2,
-      Medium: 3,
-      Hard: 5,
-      Expert: 8,
-    },
-
-    maxSteps: {
-      Easy: 2,
-      Medium: 3,
-      Hard: 5,
-      Expert: 8,
-    },
-
-    expertStyle: [
-      "multi-concept reasoning",
-      "abstract reasoning",
-      "reverse reasoning",
-      "assumption checking",
-      "mathematical modelling",
-      "interpretation",
-      "proof or justification",
-      "common-mistake traps",
-    ],
-  },
-};
-
-/*
-=========================================================
- NORMALIZE ACADEMIC LEVEL
-=========================================================
-*/
-
-function normalizeLevel(level) {
-  const value =
-    String(level || "")
-      .trim()
-      .toLowerCase();
-
-  if (
-    value.includes("university") ||
-    value.includes("undergraduate") ||
-    value.includes("tertiary")
-  ) {
-    return "University";
-  }
-
-  if (
-    value.includes("shs") ||
-    value.includes("senior") ||
-    value.includes("high school")
-  ) {
-    return "SHS";
-  }
-
-  if (
-    value.includes("jhs") ||
-    value.includes("junior") ||
-    value.includes("middle school")
-  ) {
-    return "JHS";
-  }
-
-  /*
-    Default to SHS because the existing
-    EduGen engine was primarily built
-    around secondary-school content.
-  */
-
-  return "SHS";
-}
-
-/*
-=========================================================
- NORMALIZE DIFFICULTY
-=========================================================
-*/
-
-function normalizeDifficulty(difficulty) {
-  const value =
-    String(difficulty || "")
-      .trim()
-      .toLowerCase();
-
-  if (value === "easy") {
-    return "Easy";
-  }
-
-  if (value === "medium") {
-    return "Medium";
-  }
-
-  if (value === "hard") {
-    return "Hard";
-  }
-
-  if (value === "expert") {
-    return "Expert";
-  }
-
-  return "Medium";
-}
-
-/*
-=========================================================
- GET LEVEL PROFILE
-=========================================================
-*/
-
-function getLevelProfile(
-  level,
-  difficulty
-) {
-  const normalizedLevel =
-    normalizeLevel(level);
-
-  const normalizedDifficulty =
-    normalizeDifficulty(
-      difficulty
-    );
-
-  const profile =
-    levelProfiles[
-      normalizedLevel
-    ];
-
-  return {
-    level:
-      normalizedLevel,
-
-    difficulty:
-      normalizedDifficulty,
-
-    reasoningDepth:
-      profile.reasoningDepth[
-        normalizedDifficulty
-      ],
-
-    maxSteps:
-      profile.maxSteps[
-        normalizedDifficulty
-      ],
-
-    expert:
-      normalizedDifficulty ===
-      "Expert",
-
-    expertStyle:
-      profile.expertStyle,
-  };
-}
-
-/*
-=========================================================
- RANDOM RANGE
-=========================================================
-*/
-
-function range(
-  difficulty,
-  size = "medium"
-) {
-  const normalizedDifficulty =
-    normalizeDifficulty(
-      difficulty
-    );
-
-  const selected =
-    difficultyRange[
-      normalizedDifficulty
-    ] ||
-    difficultyRange.Medium;
-
-  const [min, max] =
-    selected[size];
-
-  return randomInt(
-    min,
-    max
-  );
-}
-
-/*
-=========================================================
- LEVEL-AWARE NUMBER RANGE
-=========================================================
-
-This prevents University from simply
-being "SHS with bigger numbers".
-
-The level can influence the numerical
-complexity while the actual reasoning
-comes from the generator.
-=========================================================
-*/
-
-function levelRange(
-  level,
-  difficulty,
-  size = "medium"
-) {
-  const normalizedLevel =
-    normalizeLevel(level);
-
-  const normalizedDifficulty =
-    normalizeDifficulty(
-      difficulty
-    );
-
-  /*
-    JHS keeps numbers manageable.
-  */
-
-  if (
-    normalizedLevel === "JHS"
-  ) {
-    const ranges = {
-      Easy: {
-        small: [2, 10],
-        medium: [10, 50],
-        large: [50, 500],
-      },
-
-      Medium: {
-        small: [3, 15],
-        medium: [15, 100],
-        large: [100, 1000],
-      },
-
-      Hard: {
-        small: [5, 25],
-        medium: [25, 200],
-        large: [200, 5000],
-      },
-
-      Expert: {
-        small: [8, 40],
-        medium: [40, 500],
-        large: [500, 20000],
-      },
-    };
-
-    const [min, max] =
-      ranges[
-        normalizedDifficulty
-      ][size];
-
-    return randomInt(
-      min,
-      max
-    );
-  }
-
-  /*
-    SHS uses the original
-    difficulty-aware ranges.
-  */
-
-  if (
-    normalizedLevel === "SHS"
-  ) {
-    return range(
-      normalizedDifficulty,
-      size
-    );
-  }
-
-  /*
-    University can use larger
-    numerical ranges where appropriate,
-    but the real difficulty should come
-    from reasoning rather than huge numbers.
-  */
-
-  const universityRanges = {
-    Easy: {
-      small: [2, 20],
-      medium: [10, 100],
-      large: [100, 5000],
-    },
-
-    Medium: {
-      small: [5, 30],
-      medium: [20, 500],
-      large: [500, 10000],
-    },
-
-    Hard: {
-      small: [10, 50],
-      medium: [50, 2000],
-      large: [1000, 100000],
-    },
-
-    Expert: {
-      small: [10, 100],
-      medium: [50, 10000],
-      large: [1000, 1000000],
-    },
-  };
-
-  const [min, max] =
-    universityRanges[
-      normalizedDifficulty
-    ][size];
-
-  return randomInt(
-    min,
-    max
-  );
-}
-
-/*
-=========================================================
- REASONING PROFILE
-=========================================================
-*/
-
-function getReasoningProfile(
-  level,
-  difficulty
-) {
-  const profile =
-    getLevelProfile(
-      level,
-      difficulty
-    );
-
-  if (!profile.expert) {
-    return {
-      depth:
-        profile.reasoningDepth,
-
-      steps:
-        profile.maxSteps,
-
-      style: [
-        "direct application",
-      ],
-    };
-  }
-
-  return {
-    depth:
-      profile.reasoningDepth,
-
-    steps:
-      profile.maxSteps,
-
-    style:
-      shuffle(
-        profile.expertStyle
-      ).slice(
-        0,
-        Math.min(
-          4,
-          profile.expertStyle.length
-        )
-      ),
-  };
-}
-
-/*
-=========================================================
- EXPERT REASONING INSTRUCTION
-=========================================================
-
-Generators can use this to construct
-questions that require actual reasoning.
-It does NOT reveal the answer.
-=========================================================
-*/
-
-function expertReasoningInstruction(
-  level,
-  topic,
-  difficulty
-) {
-  const profile =
-    getReasoningProfile(
-      level,
-      difficulty
-    );
-
-  if (!profile.expert) {
-    return "";
-  }
-
-  const instruction =
-    randomItem([
-      "Determine the answer by connecting the relevant pieces of information rather than applying a formula immediately.",
-      "Identify what must be determined first before the final quantity can be found.",
-      "Use the information indirectly: not every value should be used in the first step.",
-      "Check the relationship between the given quantities before choosing a method.",
-      "Consider whether the problem requires more than one stage of reasoning.",
-      "Look carefully for a hidden relationship between the quantities provided.",
-      "Do not assume that the most obvious quantity is the one being asked for.",
-      "Work backwards from the required result where appropriate.",
-      "Consider which principle explains the situation before performing calculations.",
-    ]);
-
-  return (
-    `\n\nExpert reasoning focus: ${instruction}`
-  );
-}
-
-/*
-=========================================================
- COMMON MISTAKE TYPES
-=========================================================
-
-These are mistake patterns, NOT hardcoded
-questions. Generators can use them to
-construct intelligent distractors.
-=========================================================
-*/
-
-const commonMistakeTypes = [
-  "forgot_first_step",
-  "used_wrong_operation",
-  "reversed_operation",
-  "ignored_negative_sign",
-  "incorrect_order_of_operations",
-  "forgot_unit_conversion",
-  "used_final_value_instead_of_change",
-  "used_change_instead_of_final_value",
-  "used_wrong_formula",
-  "stopped_after_intermediate_result",
-  "forgot_coefficient",
-  "distributed_operation_incorrectly",
-  "used_wrong_ratio",
-  "reversed_ratio",
-  "forgot_percentage_conversion",
-  "added_percentages_instead_of_multiplying",
-  "rounded_too_early",
-  "used_incorrect_sign",
-  "ignored_given_condition",
-  "used_irrelevant_information",
-];
-
-/*
-=========================================================
- SELECT MISTAKE TYPES
-=========================================================
-*/
-
-function selectMistakeTypes(
-  count = 3
-) {
-  return shuffle(
-    commonMistakeTypes
-  ).slice(
-    0,
-    count
-  );
-}
-
-/*
-=========================================================
- DIFFICULTY-AWARE REASONING TEXT
-=========================================================
-*/
-
-function reasoningPrompt(
-  level,
-  difficulty,
-  topic
-) {
-  const profile =
-    getReasoningProfile(
-      level,
-      difficulty
-    );
-
-  if (!profile.expert) {
-    return `Apply the relevant ${topic || "concept"} correctly.`;
-  }
-
-  return (
-    `This ${profile.level} Expert problem requires ` +
-    `${profile.depth} levels of reasoning. ` +
-    `Consider the relationships between the given information ` +
-    `before calculating or selecting an answer.`
-  );
-}
-
-/* ========================================================
-   INTELLIGENT DISTRACTORS
-======================================================== */
-
-/*
-=========================================================
- EduGen Dynamic Distractor Engine
- --------------------------------------------------------
- Wrong answers are generated from realistic mistakes.
-
- IMPORTANT:
- - No fixed question bank
- - No fixed answer lists
- - Distractors are calculated dynamically
- - Expert questions use more plausible mistakes
-=========================================================
-*/
-
-/* ========================================================
-   NUMERIC MISTAKE GENERATORS
-======================================================== */
-
-function generateNumericMistakes(
-  answer,
-  context = {}
-) {
-  const numericAnswer =
-    Number(answer);
-
-  if (
-    !Number.isFinite(
-      numericAnswer
-    )
-  ) {
-    return [];
-  }
-
-  const {
-    spread = 10,
-    difficulty = "Medium",
-  } = context;
-
-  const mistakes = [];
-
-  /*
-    1. Intermediate-result mistake
-    Produces a value reasonably close to
-    the correct answer.
-  */
-
-  const intermediate =
-    numericAnswer +
-    randomInt(
-      -Math.max(
-        1,
-        Math.round(
-          Math.abs(
-            numericAnswer
-          ) * 0.15
-        )
-      ),
-      Math.max(
-        1,
-        Math.round(
-          Math.abs(
-            numericAnswer
-          ) * 0.15
-        )
-      )
-    );
-
-  mistakes.push(
-    intermediate
-  );
-
-  /*
-    2. Operation/sign mistake
-  */
-
-  if (
-    numericAnswer !== 0
-  ) {
-    mistakes.push(
-      -numericAnswer
-    );
-  }
-
-  /*
-    3. Percentage/scale mistake
-  */
-
-  if (
-    Math.abs(
-      numericAnswer
-    ) >= 10
-  ) {
-    mistakes.push(
-      numericAnswer / 10
-    );
-
-    mistakes.push(
-      numericAnswer * 10
-    );
-  }
-
-  /*
-    4. Nearby calculation mistake
-  */
-
-  const variation =
-    Math.max(
-      1,
-      Math.round(
-        Math.abs(
-          numericAnswer
-        ) > 100
-          ? Math.abs(
-              numericAnswer
-            ) * 0.05
-          : spread
-      )
-    );
-
-  mistakes.push(
-    numericAnswer +
-      randomInt(
-        -variation,
-        variation
-      )
-  );
-
-  /*
-    5. Common arithmetic mistake
-    Such as stopping one step early.
-  */
-
-  if (
-    Number.isInteger(
-      numericAnswer
-    )
-  ) {
-    mistakes.push(
-      numericAnswer +
-        randomItem([
-          -2,
-          -1,
-          1,
-          2,
-        ])
-    );
-  }
-
-  /*
-    6. Square/root-style mistake.
-    Useful for mathematical questions.
-  */
-
-  if (
-    numericAnswer > 0
-  ) {
-    const root =
-      Math.sqrt(
-        numericAnswer
-      );
-
-    if (
-      Number.isFinite(root) &&
-      root !== numericAnswer
-    ) {
-      mistakes.push(root);
-    }
-  }
-
-  /*
-    7. Reciprocal mistake
-  */
-
-  if (
-    numericAnswer !== 0
-  ) {
-    mistakes.push(
-      1 / numericAnswer
-    );
-  }
-
-  /*
-    Expert questions get slightly
-    more sophisticated distractors.
-  */
-
-  if (
-    difficulty === "Expert"
-  ) {
-    mistakes.push(
-      numericAnswer *
-        0.75
-    );
-
-    mistakes.push(
-      numericAnswer *
-        1.25
-    );
-  }
-
-  /*
-    Remove invalid values,
-    duplicates and the real answer.
-  */
-
-  return [
-    ...new Set(
-      mistakes
-        .filter(
-          (value) =>
-            Number.isFinite(
-              Number(value)
-            )
-        )
-        .filter(
-          (value) =>
-            Number(value) !==
-            numericAnswer
-        )
-        .map(
-          (value) =>
-            Number(value)
-        )
-    ),
-  ];
-}
-
-/* ========================================================
-   SMART NUMERIC OPTIONS
-======================================================== */
-
-function numericOptions(
-  answer,
-  spread = 10,
-  context = {}
-) {
-  const numericAnswer =
-    Number(answer);
-
-  if (
-    !Number.isFinite(
-      numericAnswer
-    )
-  ) {
-    return [
-      String(answer),
-      "None of the above",
-      "Cannot be determined",
-      "Insufficient information",
-    ];
-  }
-
-  const mistakes =
-    generateNumericMistakes(
-      numericAnswer,
-      {
-        spread,
-        ...context,
-      }
-    );
-
-  const values =
-    [
-      numericAnswer,
-      ...mistakes,
-    ];
-
-  /*
-    Continue generating if we don't
-    have enough plausible answers.
-  */
-
-  let attempts = 0;
-
-  while (
-    new Set(values).size < 4 &&
-    attempts < 100
-  ) {
-    attempts++;
-
-    const variation =
-      Math.max(
-        1,
-        Math.round(
-          Math.abs(
-            numericAnswer
-          ) > 100
-            ? Math.abs(
-                numericAnswer
-              ) * 0.08
-            : spread
-        )
-      );
-
-    const wrong =
-      numericAnswer +
-      randomInt(
-        -variation,
-        variation
-      );
-
-    if (
-      Number.isFinite(
-        wrong
-      ) &&
-      wrong !==
-        numericAnswer
-    ) {
-      values.push(
-        wrong
-      );
-    }
-  }
-
-  /*
-    Final fallback.
-  */
-
-  while (
-    new Set(values).size < 4
-  ) {
-    values.push(
-      numericAnswer +
-        randomInt(
-          1,
-          20
-        )
-    );
-  }
-
-  return shuffle(
-    [
-      ...new Set(
-        values
-      ),
-    ]
-      .slice(0, 4)
-      .map(
-        (value) =>
-          fmt(value)
-      )
-  );
-}
-
-/* ========================================================
-   DISTRACTOR REASONING
-======================================================== */
-
-/*
-  Creates internal metadata explaining
-  how a wrong answer could have happened.
-
-  This is NOT shown to the student
-  before submission.
-*/
-
-function generateDistractorMetadata(
-  correctAnswer,
-  distractor,
-  context = {}
-) {
-  const numericCorrect =
-    Number(correctAnswer);
-
-  const numericDistractor =
-    Number(distractor);
-
-  if (
-    Number.isFinite(
-      numericCorrect
-    ) &&
-    Number.isFinite(
-      numericDistractor
-    )
-  ) {
-    const ratio =
-      numericCorrect !== 0
-        ? Math.abs(
-            numericDistractor /
-              numericCorrect
-          )
-        : 0;
-
-    if (
-      Math.abs(
-        numericDistractor +
-          numericCorrect
-      ) <
-      Math.abs(
-        numericCorrect
-      ) * 0.05
-    ) {
-      return {
-        answer: String(
-          distractor
-        ),
-        mistake:
-          "A sign or direction was reversed.",
-      };
-    }
-
-    if (
-      ratio >= 9 &&
-      ratio <= 11
-    ) {
-      return {
-        answer: String(
-          distractor
-        ),
-        mistake:
-          "A place-value, scale, or unit conversion error may have occurred.",
-      };
-    }
-
-    if (
-      ratio >= 0.09 &&
-      ratio <= 0.11
-    ) {
-      return {
-        answer: String(
-          distractor
-        ),
-        mistake:
-          "A scale or unit conversion may have been applied in the wrong direction.",
-      };
-    }
-
-    if (
-      ratio >= 0.7 &&
-      ratio <= 0.8
-    ) {
-      return {
-        answer: String(
-          distractor
-        ),
-        mistake:
-          "An intermediate calculation may have been used instead of completing the final step.",
-      };
-    }
-
-    if (
-      ratio >= 1.2 &&
-      ratio <= 1.3
-    ) {
-      return {
-        answer: String(
-          distractor
-        ),
-        mistake:
-          "An additional operation may have been applied when it was not required.",
-      };
-    }
-
-    return {
-      answer: String(
-        distractor
-      ),
-      mistake:
-        "A small arithmetic or calculation error may have occurred.",
-    };
-  }
-
-  /*
-    Conceptual fallback.
-  */
-
-  return {
-    answer: String(
-      distractor
-    ),
-    mistake:
-      "This represents a plausible misunderstanding of the underlying concept.",
-  };
-}
-
-/* ========================================================
-   BUILD DISTRACTOR METADATA
-======================================================== */
-
-function buildDistractorMetadata(
-  answer,
-  options,
-  context = {}
-) {
-  return options
-    .filter(
-      (option) =>
-        String(option) !==
-        String(answer)
-    )
-    .map(
-      (option) =>
-        generateDistractorMetadata(
-          answer,
-          option,
-          context
-        )
-    );
-}
-
-/* ========================================================
-   MULTIPLE CHOICE HELPER
-======================================================== */
-
-function makeMCQ(
-  answer,
-  options,
-  explanation,
-  extra = {}
-) {
-  let finalOptions = [
-    String(answer),
-    ...(options || [])
-      .map(
-        (option) =>
-          String(option)
-      ),
-  ];
-
-  /*
-    Remove duplicates.
-  */
-
-  finalOptions = [
-    ...new Set(
-      finalOptions
-    ),
-  ];
-
-  /*
-    If fewer than four options
-    exist, dynamically generate
-    numeric alternatives when possible.
-  */
-
-  if (
-    finalOptions.length <
-      4 &&
-    Number.isFinite(
-      Number(answer)
-    )
-  ) {
-    const generated =
-      numericOptions(
-        Number(answer),
-        10,
-        {
-          difficulty:
-            extra.difficulty ||
-            "Medium",
-        }
-      );
-
-    finalOptions = [
-      ...new Set([
-        ...finalOptions,
-        ...generated,
-      ]),
-    ];
-  }
-
-  /*
-    Generic fallback only if the
-    answer itself is non-numeric and
-    there aren't enough choices.
-  */
-
-  while (
-    finalOptions.length <
-    4
-  ) {
-    finalOptions.push(
-      `Alternative ${
-        finalOptions.length +
-        1
-      }`
-    );
-  }
-
-  finalOptions =
-    finalOptions.slice(
-      0,
-      4
-    );
-
-  /*
-    Generate internal metadata
-    for the incorrect choices.
-  */
-
-  const distractorMetadata =
-    buildDistractorMetadata(
-      answer,
-      finalOptions,
-      extra
-    );
-
-  return {
-    ...extra,
-
-    answer:
-      String(answer),
-
-    options:
-      shuffle(
-        finalOptions
-      ),
-
-    explanation,
-
-    /*
-      Internal educational metadata.
-      The frontend can use this AFTER
-      submission to explain common mistakes.
-    */
-
-    distractors:
-      distractorMetadata,
-  };
-}
-
-/* ========================================================
-   MATHEMATICS
-======================================================== */
-
-/* ---------- LINEAR EQUATIONS ---------- */
-
+===== LINES 1320- 3307 =====
 function linearEquation(difficulty) {
   let a;
   let b;
@@ -1582,8 +265,7 @@ function percentage(
         `GH₵${fmt(
           afterIncrease
         )} × ${
-          1 -
-          decrease / 100
+          1 - decrease / 100
         } = GH₵${fmt(
           answer
         )}.`
@@ -2087,12 +769,8 @@ function geometry(
       "Apply formulae for area and perimeter.",
   };
 }
-  /* ========================================================
-     EXPERT MATHEMATICS ENGINE
-     --------------------------------------------------------
-     Expert questions require multiple reasoning steps.
-  ======================================================== */
-/* ========================================================
+
+ /* ========================================================
    EXPERT MATHEMATICS ENGINE
    --------------------------------------------------------
    Expert questions require multiple reasoning steps.
@@ -2748,13 +1426,7 @@ function expertIndices() {
 
     ...makeMCQ(
       fmt(answer),
-      numericOptions(
-        answer,
-        Math.max(
-          10,
-          answer * 0.1
-        )
-      ),
+      numericOptions(answer, Math.max(10, answer * 0.1)),
       `Use the power-of-a-power law:\n\n` +
         `(aᵐ)ⁿ = aᵐⁿ\n\n` +
         `Therefore:\n` +
@@ -2997,7 +1669,8 @@ function generateExpertMath(topic) {
   ) {
     return expertStatistics();
   }
-   if (
+
+  if (
     t.includes("geometry") ||
     t.includes("pythag")
   ) {
@@ -3315,6 +1988,7 @@ const scienceBanks = {
    ADVANCED SCIENCE CALCULATIONS
 ======================================================== */
 
+===== LINES 3308- 4124 =====
 function advancedPhysics(
   topic,
   difficulty
@@ -3485,11 +2159,11 @@ function advancedChemistry(
   }
 
   return null;
-} 
+}
+
 /* ========================================================
    SCIENCE GENERATOR
 ======================================================== */
-
 function generateScience(
   subject,
   topic,
@@ -3745,7 +2419,6 @@ function generateScience(
 /* ========================================================
    MATH ROUTER
 ======================================================== */
-
 function generateMath(
   topic,
   difficulty,
@@ -3908,7 +2581,7 @@ function generateMath(
   /*
   ========================================================
    JHS
-  ========================================================
+   ========================================================
   */
 
   if (
@@ -4133,6 +2806,7 @@ function generateMath(
    TRUE / FALSE GENERATOR
 ======================================================== */
 
+===== LINES 4125- 4305 =====
 function convertToTrueFalse(
   question
 ) {
@@ -4222,8 +2896,7 @@ function convertToProblemSolving(
     question:
       `PROBLEM SOLVING\n\n` +
       `${question.question}\n\n` +
-      `Solve the problem carefully. You may show your working on paper.\n\n` +
-      `FINAL ANSWER: Enter only your final answer below.`,
+      `Show all relevant working and give your final answer.`,
 
     options: [],
 
@@ -4310,10 +2983,12 @@ function convertQuestion(
       "Multiple Choice",
   };
 }
+
 /* ========================================================
    MAIN GENERATOR
 ======================================================== */
 
+===== LINES 4306- 4478 =====
 function generateQuestions({
   subject,
   topic,
@@ -4336,146 +3011,146 @@ function generateQuestions({
 
   let attempts = 0;
 
+/*
+=========================================================
+ SMART GENERATION LOOP
+ --------------------------------------------------------
+ - Keeps trying to reach the requested count
+ - Prevents exact duplicates
+ - Gives generators enough attempts
+ - Does not depend on the user answering questions
+ - Every Generate request is independent
+=========================================================
+*/
+
+const maxAttempts = Math.max(
+  requestedCount * 250,
+  500
+);
+
+while (
+  questions.length < requestedCount &&
+  attempts < maxAttempts
+) {
+  attempts++;
+
+  let generated;
+
   /*
-  =========================================================
-   SMART GENERATION LOOP
-   --------------------------------------------------------
-   - Keeps trying to reach the requested count
-   - Prevents exact duplicates
-   - Gives generators enough attempts
-   - Does not depend on the user answering questions
-   - Every Generate request is independent
-  =========================================================
+    Mathematics
   */
 
-  const maxAttempts = Math.max(
-    requestedCount * 250,
-    500
-  );
-
-  while (
-    questions.length < requestedCount &&
-    attempts < maxAttempts
+  if (
+    String(subject)
+      .toLowerCase() ===
+      "mathematics" ||
+    String(subject)
+      .toLowerCase() ===
+      "math"
   ) {
-    attempts++;
-
-    let generated;
-
-    /*
-      Mathematics
-    */
-
-    if (
-      String(subject)
-        .toLowerCase() ===
-        "mathematics" ||
-      String(subject)
-        .toLowerCase() ===
-        "math"
-    ) {
-      generated =
-        generateMath(
-          topic,
-          difficulty,
-          level
-        );
-    }
-
-    /*
-      All other subjects
-    */
-
-    else {
-      generated =
-        generateScience(
-          subject,
-          topic,
-          difficulty,
-          level
-        );
-    }
-
-    /*
-      Generator failed.
-      Try again instead of stopping.
-    */
-
-    if (!generated) {
-      continue;
-    }
-
-    /*
-      Convert to the requested
-      question type.
-    */
-
     generated =
-      convertQuestion(
-        generated,
-        questionType
-      );
-
-    /*
-      Duplicate detection happens
-      AFTER conversion so that the
-      actual displayed question is
-      what gets compared.
-    */
-
-    const normalized =
-      cleanText(
-        generated.question
-      );
-
-    if (
-      used.has(normalized)
-    ) {
-      continue;
-    }
-
-    used.add(normalized);
-
-    /*
-      Store the generated question.
-    */
-
-    questions.push({
-      id: makeId(),
-
-      subject,
-
-      topic:
-        generated.topic ||
+      generateMath(
         topic,
-
-      level,
-
-      difficulty,
-
-      questionType:
-        generated.questionType ||
-        questionType ||
-        "Multiple Choice",
-
-      question:
-        generated.question,
-
-      options:
-        generated.options ||
-        [],
-
-      answer:
-        generated.answer,
-
-      explanation:
-        generated.explanation ||
-        "Review the underlying concept and work through the problem carefully.",
-
-      learningObjective:
-        generated.learningObjective ||
-        "Apply the relevant concept correctly.",
-    });
+        difficulty,
+        level
+      );
   }
+
+  /*
+    All other subjects
+  */
+
+  else {
+    generated =
+      generateScience(
+        subject,
+        topic,
+        difficulty,
+        level
+      );
+  }
+
+  /*
+    Generator failed.
+    Try again instead of stopping.
+  */
+
+  if (!generated) {
+    continue;
+  }
+
+  /*
+    Convert to the requested
+    question type.
+  */
+
+  generated =
+    convertQuestion(
+      generated,
+      questionType
+    );
+
+  /*
+    Duplicate detection happens
+    AFTER conversion so that the
+    actual displayed question is
+    what gets compared.
+  */
+
+  const normalized =
+    cleanText(
+      generated.question
+    );
+
+  if (
+    used.has(normalized)
+  ) {
+    continue;
+  }
+
+  used.add(normalized);
+
+  /*
+    Store the generated question.
+  */
+
+  questions.push({
+    id: makeId(),
+
+    subject,
+
+    topic:
+      generated.topic ||
+      topic,
+
+    level,
+
+    difficulty,
+
+    questionType:
+      generated.questionType ||
+      questionType ||
+      "Multiple Choice",
+
+    question:
+      generated.question,
+
+    options:
+      generated.options ||
+      [],
+
+    answer:
+      generated.answer,
+
+    explanation:
+      generated.explanation ||
+      "Review the underlying concept and work through the problem carefully.",
+
+    learningObjective:
+      generated.learningObjective ||
+      "Apply the relevant concept correctly.",
+  });
+}
 
   return questions;
 }

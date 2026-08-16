@@ -686,6 +686,7 @@ function reasoningPrompt(
   );
 }
 
+
 /* ========================================================
    INTELLIGENT DISTRACTORS
 ======================================================== */
@@ -1310,7 +1311,6 @@ function makeMCQ(
       distractorMetadata,
   };
 }
-
 /* ========================================================
    MATHEMATICS
 ======================================================== */
@@ -1582,8 +1582,7 @@ function percentage(
         `GH₵${fmt(
           afterIncrease
         )} × ${
-          1 -
-          decrease / 100
+          1 - decrease / 100
         } = GH₵${fmt(
           answer
         )}.`
@@ -2087,12 +2086,8 @@ function geometry(
       "Apply formulae for area and perimeter.",
   };
 }
-  /* ========================================================
-     EXPERT MATHEMATICS ENGINE
-     --------------------------------------------------------
-     Expert questions require multiple reasoning steps.
-  ======================================================== */
-/* ========================================================
+
+ /* ========================================================
    EXPERT MATHEMATICS ENGINE
    --------------------------------------------------------
    Expert questions require multiple reasoning steps.
@@ -2748,13 +2743,7 @@ function expertIndices() {
 
     ...makeMCQ(
       fmt(answer),
-      numericOptions(
-        answer,
-        Math.max(
-          10,
-          answer * 0.1
-        )
-      ),
+      numericOptions(answer, Math.max(10, answer * 0.1)),
       `Use the power-of-a-power law:\n\n` +
         `(aᵐ)ⁿ = aᵐⁿ\n\n` +
         `Therefore:\n` +
@@ -2997,7 +2986,8 @@ function generateExpertMath(topic) {
   ) {
     return expertStatistics();
   }
-   if (
+
+  if (
     t.includes("geometry") ||
     t.includes("pythag")
   ) {
@@ -3485,11 +3475,11 @@ function advancedChemistry(
   }
 
   return null;
-} 
+}
+
 /* ========================================================
    SCIENCE GENERATOR
 ======================================================== */
-
 function generateScience(
   subject,
   topic,
@@ -3745,7 +3735,6 @@ function generateScience(
 /* ========================================================
    MATH ROUTER
 ======================================================== */
-
 function generateMath(
   topic,
   difficulty,
@@ -3908,7 +3897,7 @@ function generateMath(
   /*
   ========================================================
    JHS
-  ========================================================
+   ========================================================
   */
 
   if (
@@ -4222,8 +4211,7 @@ function convertToProblemSolving(
     question:
       `PROBLEM SOLVING\n\n` +
       `${question.question}\n\n` +
-      `Solve the problem carefully. You may show your working on paper.\n\n` +
-      `FINAL ANSWER: Enter only your final answer below.`,
+      `Show all relevant working and give your final answer.`,
 
     options: [],
 
@@ -4310,6 +4298,7 @@ function convertQuestion(
       "Multiple Choice",
   };
 }
+
 /* ========================================================
    MAIN GENERATOR
 ======================================================== */
@@ -4336,146 +4325,146 @@ function generateQuestions({
 
   let attempts = 0;
 
+/*
+=========================================================
+ SMART GENERATION LOOP
+ --------------------------------------------------------
+ - Keeps trying to reach the requested count
+ - Prevents exact duplicates
+ - Gives generators enough attempts
+ - Does not depend on the user answering questions
+ - Every Generate request is independent
+=========================================================
+*/
+
+const maxAttempts = Math.max(
+  requestedCount * 250,
+  500
+);
+
+while (
+  questions.length < requestedCount &&
+  attempts < maxAttempts
+) {
+  attempts++;
+
+  let generated;
+
   /*
-  =========================================================
-   SMART GENERATION LOOP
-   --------------------------------------------------------
-   - Keeps trying to reach the requested count
-   - Prevents exact duplicates
-   - Gives generators enough attempts
-   - Does not depend on the user answering questions
-   - Every Generate request is independent
-  =========================================================
+    Mathematics
   */
 
-  const maxAttempts = Math.max(
-    requestedCount * 250,
-    500
-  );
-
-  while (
-    questions.length < requestedCount &&
-    attempts < maxAttempts
+  if (
+    String(subject)
+      .toLowerCase() ===
+      "mathematics" ||
+    String(subject)
+      .toLowerCase() ===
+      "math"
   ) {
-    attempts++;
-
-    let generated;
-
-    /*
-      Mathematics
-    */
-
-    if (
-      String(subject)
-        .toLowerCase() ===
-        "mathematics" ||
-      String(subject)
-        .toLowerCase() ===
-        "math"
-    ) {
-      generated =
-        generateMath(
-          topic,
-          difficulty,
-          level
-        );
-    }
-
-    /*
-      All other subjects
-    */
-
-    else {
-      generated =
-        generateScience(
-          subject,
-          topic,
-          difficulty,
-          level
-        );
-    }
-
-    /*
-      Generator failed.
-      Try again instead of stopping.
-    */
-
-    if (!generated) {
-      continue;
-    }
-
-    /*
-      Convert to the requested
-      question type.
-    */
-
     generated =
-      convertQuestion(
-        generated,
-        questionType
-      );
-
-    /*
-      Duplicate detection happens
-      AFTER conversion so that the
-      actual displayed question is
-      what gets compared.
-    */
-
-    const normalized =
-      cleanText(
-        generated.question
-      );
-
-    if (
-      used.has(normalized)
-    ) {
-      continue;
-    }
-
-    used.add(normalized);
-
-    /*
-      Store the generated question.
-    */
-
-    questions.push({
-      id: makeId(),
-
-      subject,
-
-      topic:
-        generated.topic ||
+      generateMath(
         topic,
-
-      level,
-
-      difficulty,
-
-      questionType:
-        generated.questionType ||
-        questionType ||
-        "Multiple Choice",
-
-      question:
-        generated.question,
-
-      options:
-        generated.options ||
-        [],
-
-      answer:
-        generated.answer,
-
-      explanation:
-        generated.explanation ||
-        "Review the underlying concept and work through the problem carefully.",
-
-      learningObjective:
-        generated.learningObjective ||
-        "Apply the relevant concept correctly.",
-    });
+        difficulty,
+        level
+      );
   }
+
+  /*
+    All other subjects
+  */
+
+  else {
+    generated =
+      generateScience(
+        subject,
+        topic,
+        difficulty,
+        level
+      );
+  }
+
+  /*
+    Generator failed.
+    Try again instead of stopping.
+  */
+
+  if (!generated) {
+    continue;
+  }
+
+  /*
+    Convert to the requested
+    question type.
+  */
+
+  generated =
+    convertQuestion(
+      generated,
+      questionType
+    );
+
+  /*
+    Duplicate detection happens
+    AFTER conversion so that the
+    actual displayed question is
+    what gets compared.
+  */
+
+  const normalized =
+    cleanText(
+      generated.question
+    );
+
+  if (
+    used.has(normalized)
+  ) {
+    continue;
+  }
+
+  used.add(normalized);
+
+  /*
+    Store the generated question.
+  */
+
+  questions.push({
+    id: makeId(),
+
+    subject,
+
+    topic:
+      generated.topic ||
+      topic,
+
+    level,
+
+    difficulty,
+
+    questionType:
+      generated.questionType ||
+      questionType ||
+      "Multiple Choice",
+
+    question:
+      generated.question,
+
+    options:
+      generated.options ||
+      [],
+
+    answer:
+      generated.answer,
+
+    explanation:
+      generated.explanation ||
+      "Review the underlying concept and work through the problem carefully.",
+
+    learningObjective:
+      generated.learningObjective ||
+      "Apply the relevant concept correctly.",
+  });
+}
 
   return questions;
 }
