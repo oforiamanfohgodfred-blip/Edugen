@@ -1,0 +1,581 @@
++      `\n\nFocus on mechanism, assumptions and why the alternatives fail.`;
++  }
+ 
+   return {
+     topic:
+@@ -3744,27 +4019,31 @@
+     String(topic || "")
+       .toLowerCase();
+ 
++  const currentDifficulty =
++    normalizeDifficulty(
++      difficulty
++    );
++
+   const currentLevel =
+-    String(level || "SHS")
+-      .toLowerCase();
++    normalizeLevel(level);
+ 
+   /*
+-  ========================================================
+-   LEVEL-AWARE MATHEMATICS ROUTING
+-  ========================================================
++    Expert mode must enter the genuine
++    Expert engine before the ordinary
++    level router. This is the key fix that
++    prevents Expert from behaving like
++    Hard with larger numbers.
+   */
+-
+-  /*
+-   UNIVERSITY
+-   -------------------------------------------------------
+-   University questions should favour deeper mathematical
+-   reasoning instead of simply increasing the numbers.
+-  */
+-
+   if (
+-    currentLevel.includes("university") ||
+-    currentLevel.includes("tertiary") ||
+-    currentLevel.includes("college")
++    currentDifficulty === "Expert"
++  ) {
++    return generateExpertMath(
++      topic
++    );
++  }
++
++  if (
++    currentLevel === "University"
+   ) {
+     if (
+       t.includes("linear") ||
+@@ -3772,7 +4051,7 @@
+       t.includes("algebra")
+     ) {
+       return linearEquation(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3781,15 +4060,13 @@
+       t.includes("system")
+     ) {
+       return simultaneousEquations(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+-    if (
+-      t.includes("quadratic")
+-  ) {
++    if (t.includes("quadratic")) {
+       return quadratic(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3798,7 +4075,7 @@
+       t.includes("percent")
+     ) {
+       return percentage(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3807,15 +4084,13 @@
+       t.includes("proportion")
+     ) {
+       return ratio(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+-    if (
+-      t.includes("probability")
+-    ) {
++    if (t.includes("probability")) {
+       return probability(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3824,7 +4099,7 @@
+       t.includes("trig")
+     ) {
+       return trigonometry(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3834,23 +4109,19 @@
+       t.includes("exponent")
+     ) {
+       return indices(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+-    if (
+-      t.includes("log")
+-  ) {
++    if (t.includes("log")) {
+       return logarithms(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+-    if (
+-      t.includes("sequence")
+-  ) {
++    if (t.includes("sequence")) {
+       return sequences(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3859,15 +4130,13 @@
+       t.includes("statistic")
+     ) {
+       return statistics(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+-    if (
+-      t.includes("function")
+-  ) {
++    if (t.includes("function")) {
+       return functions(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3877,47 +4146,23 @@
+       t.includes("perimeter")
+     ) {
+       return geometry(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+-    /*
+-      If the requested university topic
+-      is not yet represented by a
+-      dedicated generator, use the
+-      strongest general algebraic
+-      generator rather than failing.
+-    */
+-
+-    return linearEquation(
+-      difficulty
+-    );
+-  }
+-
+-  /*
+-  ========================================================
+-   JHS
+-  ========================================================
+-  */
++    return null;
++  }
+ 
+   if (
+-    currentLevel.includes("jhs") ||
+-    currentLevel.includes("junior") ||
+-    currentLevel.includes("basic") ||
+-    currentLevel.includes("middle")
++    currentLevel === "JHS"
+   ) {
+-    /*
+-      JHS should focus on foundational
+-      mathematical reasoning.
+-    */
+-
+     if (
+       t.includes("linear") ||
+       t.includes("equation") ||
+       t.includes("algebra")
+     ) {
+       return linearEquation(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3926,7 +4171,7 @@
+       t.includes("percent")
+     ) {
+       return percentage(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3935,15 +4180,13 @@
+       t.includes("proportion")
+     ) {
+       return ratio(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+-    if (
+-      t.includes("probability")
+-  ) {
++    if (t.includes("probability")) {
+       return probability(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3953,7 +4196,7 @@
+       t.includes("average")
+     ) {
+       return statistics(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+@@ -3963,16 +4206,9 @@
+       t.includes("perimeter")
+     ) {
+       return geometry(
+-        difficulty
++        currentDifficulty
+       );
+     }
+-
+-    /*
+-      Some JHS systems may still request
+-      topics such as indices or sequences.
+-      They are allowed, but remain within
+-      the existing generator framework.
+-    */
+ 
+     if (
+       t.includes("indices") ||
+@@ -3980,70 +4216,46 @@
+       t.includes("exponent")
+     ) {
+       return indices(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+-    if (
+-      t.includes("sequence")
+-  ) {
++    if (t.includes("sequence")) {
+       return sequences(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+-    /*
+-      JHS fallback.
+-    */
+-
+-    return linearEquation(
+-      difficulty
+-    );
+-  }
+-
+-  /*
+-  ========================================================
+-   SHS
+-  ========================================================
+-  */
+-
+-  if (
+-    t.includes("simultaneous")
+-  ) {
++    return null;
++  }
++
++  if (t.includes("simultaneous")) {
+     return simultaneousEquations(
+-      difficulty
+-    );
+-  }
+-
+-  if (
+-    t.includes("quadratic")
+-  ) {
++      currentDifficulty
++    );
++  }
++
++  if (t.includes("quadratic")) {
+     return quadratic(
+-      difficulty
+-    );
+-  }
+-
+-  if (
+-    t.includes("percent")
+-  ) {
++      currentDifficulty
++    );
++  }
++
++  if (t.includes("percent")) {
+     return percentage(
+-      difficulty
+-    );
+-  }
+-
+-  if (
+-    t.includes("ratio")
+-  ) {
++      currentDifficulty
++    );
++  }
++
++  if (t.includes("ratio")) {
+     return ratio(
+-      difficulty
+-    );
+-  }
+-
+-  if (
+-    t.includes("probability")
+-  ) {
++      currentDifficulty
++    );
++  }
++
++  if (t.includes("probability")) {
+     return probability(
+-      difficulty
++      currentDifficulty
+     );
+   }
+ 
+@@ -4052,7 +4264,7 @@
+     t.includes("trig")
+   ) {
+     return trigonometry(
+-      difficulty
++      currentDifficulty
+     );
+   }
+ 
+@@ -4062,23 +4274,19 @@
+     t.includes("exponent")
+   ) {
+     return indices(
+-      difficulty
++      currentDifficulty
+     );
+   }
+ 
+-  if (
+-    t.includes("log")
+-  ) {
++  if (t.includes("log")) {
+     return logarithms(
+-      difficulty
++      currentDifficulty
+     );
+   }
+ 
+-  if (
+-    t.includes("sequence")
+-  ) {
++  if (t.includes("sequence")) {
+     return sequences(
+-      difficulty
++      currentDifficulty
+     );
+   }
+ 
+@@ -4087,15 +4295,13 @@
+       t.includes("statistic")
+     ) {
+       return statistics(
+-        difficulty
++        currentDifficulty
+       );
+     }
+ 
+-  if (
+-    t.includes("function")
+-  ) {
++  if (t.includes("function")) {
+     return functions(
+-      difficulty
+-    );
+-  }
+-
+-  /*
+-    General algebra fallback.
+-  */
+-
+-  return linearEquation(
+-    difficulty
+-  );
++      currentDifficulty
++    );
++  }
++
++  return null;
+ }
+ 
+ /* ========================================================
+@@ -4311,160 +4511,135 @@
+   questionType,
+   count,
+ }) {
+-  const requestedCount = Math.min(
++  const requestedCount =
++    Math.min(
++      Math.max(
++        parseInt(count, 10) || 5,
++        1
++      ),
++      20
++    );
++
++  const normalizedSubject =
++    normalizeSubject(subject);
++
++  const normalizedLevel =
++    normalizeLevel(level);
++
++  const normalizedDifficulty =
++    normalizeDifficulty(
++      difficulty
++    );
++
++  const questions = [];
++  const used = new Set();
++
++  let attempts = 0;
++
++  /*
++    Dynamic generators can usually reach the
++    requested count. The attempt ceiling remains
++    high enough for duplicate rejection.
++  */
++  const maxAttempts =
++    Math.max(
++      requestedCount * 300,
++      750
++    );
++
++  while (
++    questions.length <
++      requestedCount &&
++    attempts <
++      maxAttempts
++  ) {
++    attempts++;
++
++    let generated;
++
++    if (
++      normalizedSubject ===
++      "Mathematics"
++    ) {
++      generated =
++        generateMath(
++          topic,
++          normalizedDifficulty,
++          normalizedLevel
++        );
++    } else {
++      generated =
++        generateScience(
++          normalizedSubject,
++          topic,
++          normalizedDifficulty,
++          normalizedLevel
++        );
++    }
++
++    if (!generated) {
++      continue;
++    }
++
++    generated =
++      convertQuestion(
++        generated,
++        questionType
++      );
++
++    const normalized =
++      cleanText(
++        generated.question
++      );
++
++    if (
++      used.has(normalized)
++    ) {
++      continue;
++    }
++
++    used.add(normalized);
++
++    questions.push({
++      id: makeId(),
++
++      subject:
++        normalizedSubject,
++
++      topic:
++        generated.topic ||
++        topic,
++
++      level:
++        normalizedLevel,
++
++      difficulty:
++        normalizedDifficulty,
++
++      questionType:
++        generated.questionType ||
++        questionType ||
++        "Multiple Choice",
++
++      question:
++        generated.question,
++
++      options:
++        generated.options ||
++        [],
++
++      answer:
++        generated.answer,
++
++      explanation:
++        generated.explanation ||
++        "Review the underlying concept and work through the problem carefully.",
++
++      learningObjective:
++        generated.learningObjective ||
++        "Apply the relevant concept correctly.",
++    });
++  }
++
++  return questions;
++}
