@@ -1,0 +1,402 @@
++            `Kinetic energy = ½mv² = ${fmt(ke)} J.\n\n` +
++            `Total = ${pe} + ${fmt(ke)} = ${fmt(total)} J.`
++        ),
++        learningObjective:
++          "Combine gravitational potential and kinetic energy in one calculation.",
++      };
++    }
++
++    if (t.includes("electric")) {
++      const r1 = randomInt(2, 12);
++      const r2 = randomInt(2, 12);
++      const voltage = randomInt(12, 48);
++      const resistance = r1 + r2;
++      const current = voltage / resistance;
++      const power = voltage * current;
++
++      return {
++        topic: "Electricity",
++        question:
++          `Two resistors of ${r1} Ω and ${r2} Ω are connected in series to a ${voltage} V supply.\n\n` +
++          `Calculate the circuit current and total power.`,
++        ...makeMCQ(
++          `I = ${fmt(current)} A; P = ${fmt(power)} W`,
++          [
++            `I = ${fmt(voltage / r1)} A; P = ${fmt(power)} W`,
++            `I = ${fmt(current)} A; P = ${fmt(voltage * voltage / r1)} W`,
++            `I = ${fmt(voltage / resistance)} A; P = ${fmt(voltage * resistance)} W`,
++          ],
++          `Series resistance = ${r1} + ${r2} = ${resistance} Ω.\n` +
++            `I = V/R = ${voltage}/${resistance} = ${fmt(current)} A.\n` +
++            `P = VI = ${voltage} × ${fmt(current)} = ${fmt(power)} W.`
++        ),
++        learningObjective:
++          "Combine series resistance, Ohm's law and electrical power.",
++      };
++    }
++
++    if (t.includes("momentum")) {
++      const m1 = randomInt(2, 10);
++      const m2 = randomInt(2, 10);
++      const u1 = randomInt(5, 20);
++      const u2 = -randomInt(2, 10);
++      const finalV = (m1 * u1 + m2 * u2) / (m1 + m2);
++
++      return {
++        topic: "Momentum",
++        question:
++          `Two objects collide and stick together. Object A has mass ${m1} kg and velocity ${u1} m/s. ` +
++          `Object B has mass ${m2} kg and velocity ${u2} m/s in the opposite direction.\n\n` +
++          `Find their common velocity after collision.`,
++        ...makeMCQ(
++          `${fmt(finalV)} m/s`,
++          numericOptions(finalV, 3, { difficulty: "Expert" }),
++          `Conservation of momentum:\n` +
++            `m₁u₁ + m₂u₂ = (m₁ + m₂)v.\n\n` +
++            `Therefore v = [${m1}(${u1}) + ${m2}(${u2})] / ${m1 + m2} = ${fmt(finalV)} m/s.`
++        ),
++        learningObjective:
++          "Apply conservation of momentum to a multi-object collision.",
++      };
++    }
++  }
++
++  if (s === "Chemistry") {
++    if (t.includes("mole")) {
++      const mass = randomInt(20, 250);
++      const molarMass = randomInt(20, 100);
++      const moles = mass / molarMass;
++      const particles = moles * 6.022e23;
++
++      return {
++        topic: "Moles",
++        question:
++          `A sample has mass ${mass} g and molar mass ${molarMass} g/mol.\n\n` +
++          `Calculate the amount in moles and the approximate number of particles.`,
++        ...makeMCQ(
++          `${fmt(moles, 3)} mol; ${particles.toExponential(3)} particles`,
++          [
++            `${fmt(moles, 3)} mol; ${(mass * 6.022e23).toExponential(3)} particles`,
++            `${fmt(mass / (molarMass * 2), 3)} mol; ${(particles / 2).toExponential(3)} particles`,
++            `${fmt(molarMass / mass, 3)} mol; ${(6.022e23 / moles).toExponential(3)} particles`,
++          ],
++          `n = m/M = ${mass}/${molarMass} = ${fmt(moles, 3)} mol.\n` +
++            `Number of particles = n × 6.022 × 10²³ ≈ ${particles.toExponential(3)}.`
++        ),
++        learningObjective:
++          "Connect mass, molar mass, amount of substance and particle number.",
++      };
++    }
++
++    if (t.includes("atomic")) {
++      const protons = randomInt(8, 25);
++      const neutrons = randomInt(8, 30);
++      const charge = randomItem([-2, -1, 1, 2]);
++      const electrons = protons - charge;
++      const massNumber = protons + neutrons;
++
++      return {
++        topic: "Atomic Structure",
++        question:
++          `An ion has ${protons} protons, ${neutrons} neutrons and a charge of ${charge > 0 ? "+" : ""}${charge}.\n\n` +
++          `Determine its mass number and number of electrons.`,
++        ...makeMCQ(
++          `Mass number = ${massNumber}; electrons = ${electrons}`,
++          [
++            `Mass number = ${protons}; electrons = ${electrons}`,
++            `Mass number = ${massNumber}; electrons = ${protons}`,
++            `Mass number = ${neutrons}; electrons = ${electrons}`,
++          ],
++          `Mass number = protons + neutrons = ${protons} + ${neutrons} = ${massNumber}.\n` +
++            `For a charge of ${charge}, electrons = protons − charge = ${electrons}.`
++        ),
++        learningObjective:
++          "Relate proton number, neutron number, charge and electron number.",
++      };
++    }
++
++    if (t.includes("electro")) {
++      const current = randomInt(2, 10);
++      const time = randomInt(60, 600);
++      const charge = current * time;
++
++      return {
++        topic: "Electrochemistry",
++        question:
++          `An electrolytic cell carries a current of ${current} A for ${time} s.\n\n` +
++          `How much electric charge passes through the cell?`,
++        ...makeMCQ(
++          `${charge} C`,
++          numericOptions(charge, Math.max(20, Math.round(charge * 0.1)), { difficulty: "Expert" }),
++          `Use Q = It.\nQ = ${current} × ${time} = ${charge} C.`
++        ),
++        learningObjective:
++          "Use the relationship between current, time and charge in electrochemistry.",
++      };
++    }
++  }
++
++  if (s === "Biology") {
++    if (t.includes("genetic")) {
++      const trait = randomItem([
++        ["T", "t", "height"],
++        ["B", "b", "fur colour"],
++        ["R", "r", "seed shape"],
++        ["P", "p", "flower colour"],
++        ["A", "a", "a simplified inherited trait"],
++      ]);
++
++      const dominant = trait[0];
++      const recessive = trait[1];
++      const traitName = trait[2];
++
++      const target = randomItem([
++        "recessive",
++        "heterozygous",
++        "dominant phenotype",
++        "homozygous dominant",
++      ]);
++
++      const answers = {
++        recessive: "1/4",
++        heterozygous: "1/2",
++        "dominant phenotype": "3/4",
++        "homozygous dominant": "1/4",
++      };
++
++      const answer = answers[target];
++
++      return {
++        topic: "Genetics",
++        question:
++          `In a simplified inheritance model, ${dominant} is dominant over ${recessive} for ${traitName}.\n\n` +
++          `Two heterozygous parents are crossed: ${dominant}${recessive} × ${dominant}${recessive}.\n\n` +
++          `What fraction of the offspring are expected to be ${target}?`,
++        ...makeMCQ(
++          answer,
++          [
++            target === "heterozygous" ? "1/4" : "1/2",
++            target === "dominant phenotype" ? "1/2" : "3/4",
++            target === "recessive" ? "3/4" : "1/4",
++          ],
++          `The possible genotypes are ${dominant}${dominant}, ${dominant}${recessive}, ${dominant}${recessive}, and ${recessive}${recessive}.\n\n` +
++            `Therefore the required fraction is ${answer}.`
++        ),
++        learningObjective:
++          "Use a monohybrid cross to distinguish genotype probabilities from phenotype probabilities.",
++      };
++    }
++
++    if (t.includes("cell")) {
++      return {
++        topic: "Cell Biology",
++        question:
++          `A plant cell is placed in a solution with a lower water potential than the cell contents.\n\n` +
++          `Predict the direction of water movement and explain the likely effect on the cell.`,
++        ...makeMCQ(
++          "Water leaves the cell; the cell becomes plasmolysed",
++          [
++            "Water enters the cell; the cell becomes plasmolysed",
++            "No water moves because osmosis stops",
++            "Water leaves the cell; the cell becomes turgid",
++          ],
++          `Water moves by osmosis from higher to lower water potential.\n` +
++            `Because the external solution has lower water potential, water leaves the cell and the membrane pulls away from the cell wall as plasmolysis develops.`
++        ),
++        learningObjective:
++          "Apply water-potential reasoning to osmosis in plant cells.",
++      };
++    }
++  }
++
++  return null;
++}
++
+ function generateScience(
+   subject,
+   topic,
+   difficulty,
+   level
+ ) {
++  const normalizedSubject =
++    normalizeSubject(subject);
++
++  const currentLevel =
++    normalizeLevel(level);
++
++  const currentDifficulty =
++    normalizeDifficulty(difficulty);
++
++  const topicKey =
++    String(topic || "")
++      .trim()
++      .toLowerCase();
++
++  /*
++    Expert science gets genuinely dynamic,
++    multi-step questions before the smaller
++    concept bank is considered.
++  */
++  if (currentDifficulty === "Expert") {
++    const expert = generateExpertScience(
++      normalizedSubject,
++      topicKey
++    );
++
++    if (expert) {
++      return expert;
++    }
++  }
++
++  /*
++    Advanced calculations.
++  */
++  if (normalizedSubject === "Physics") {
++    const advanced =
++      advancedPhysics(
++        topicKey,
++        currentDifficulty
++      );
++
++    if (advanced) {
++      return advanced;
++    }
++  }
++
++  if (normalizedSubject === "Chemistry") {
++    const advanced =
++      advancedChemistry(
++        topicKey,
++        currentDifficulty
++      );
++
++    if (advanced) {
++      return advanced;
++    }
++  }
++
++  const subjectBank =
++    scienceBanks[
++      normalizedSubject
++    ];
++
++  if (!subjectBank) {
++    return null;
++  }
++
++  /*
++    Find the requested topic.
++    Exact and normalized partial matches
++    are allowed, but an unknown topic no
++    longer silently becomes an unrelated
++    question.
++  */
++  let pool = null;
++
++  const exactKey =
++    Object.keys(subjectBank)
++      .find(
++        (key) =>
++          key.toLowerCase() ===
++          topicKey
++      );
++
++  if (exactKey) {
++    pool =
++      subjectBank[exactKey];
++  }
++
++  if (!pool && topicKey) {
++    const matchingTopic =
++      Object.keys(subjectBank)
++        .find((key) => {
++          const k =
++            key.toLowerCase();
++
++          return (
++            k.includes(topicKey) ||
++            topicKey.includes(k)
++          );
++        });
++
++    if (matchingTopic) {
++      pool =
++        subjectBank[matchingTopic];
++    }
++  }
++
++  if (!pool && !topicKey) {
++    pool =
++      Object.values(
++        subjectBank
++      ).flat();
++  }
++
++  if (!pool || pool.length === 0) {
++    return null;
++  }
++
++  const base =
++    randomItem(pool);
++
++  let question =
++    base.q;
++
++  let options =
++    base.o;
++
++  let answer =
++    base.a;
++
++  let explanation =
++    base.e;
++
++  const isJHS =
++    currentLevel === "JHS";
++
++  const isUniversity =
++    currentLevel === "University";
++
++  if (isJHS) {
++    if (
++      currentDifficulty === "Hard"
++    ) {
++      question =
++        `${question}\n\nWhich conclusion is best supported by the evidence or scientific principle involved?`;
++
++      explanation +=
++        `\n\nFocus on identifying the scientific principle and applying it to the situation.`;
++    }
++  } else if (!isUniversity) {
++    if (
++      currentDifficulty === "Hard"
++    ) {
++      question =
++        `${question}\n\nWhich conclusion is most scientifically justified?`;
++
++      explanation +=
++        `\n\nIdentify the underlying principle and apply it rather than relying only on recall.`;
++    }
++  } else {
++    question =
++      `UNIVERSITY-LEVEL ANALYSIS\n\n` +
++      `Consider the following scientific problem:\n\n` +
++      `${question}\n\n` +
++      `Which conclusion is most scientifically defensible based on the underlying mechanism?`;
++
++    explanation +=
++      `\n\nFocus on mechanism, assumptions and why the alternatives fail.`;
++  }
++
++  return {
++    topic:
++      topic || "General Science",
++    question,
++    options,
++    answer,
++    explanation,
++    learningObjective:
++      "Apply the relevant scientific principle and interpret the situation correctly.",
++  };
++}
++
