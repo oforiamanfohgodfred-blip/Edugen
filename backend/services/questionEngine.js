@@ -1,3 +1,7 @@
+const { getKnowledgeContext } = require("./textbookAdapter");
+const { validateQuestion, transformQuestion, makeMixedType, signature } = require("./questionQualityEngine");
+const { loadLocalTextbook, buildKnowledgeContext } = require("./textbookEngine");
+const { validateRequest, normalizeGrade, normalizeSubject } = require("./curriculumEngine");
 const crypto = require("crypto");
 
 /*
@@ -4314,170 +4318,36 @@ function convertQuestion(
    MAIN GENERATOR
 ======================================================== */
 
-function generateQuestions({
-  subject,
-  topic,
-  level,
-  difficulty,
-  questionType,
-  count,
-}) {
-  const requestedCount = Math.min(
-    Math.max(
-      parseInt(count, 10) || 5,
-      1
-    ),
-    20
-  );
-
-  const questions = [];
-
-  const used = new Set();
-
+function generateQuestions({ subject, topic, level, grade, difficulty, questionType, count }) {
+  const requestedCount = Math.min(Math.max(Number.parseInt(count, 10) || 5, 1), 50);
+  const normalizedGrade = normalizeGrade(grade || level);
+  const normalizedSubject = normalizeSubject(subject);
+  const validation = validateRequest({ grade: normalizedGrade, subject: normalizedSubject, topic });
+  if (!validation.valid) throw new Error(validation.message || "Invalid curriculum request.");
+  const results = [];
+  const seen = new Set();
+  const maxAttempts = Math.max(1500, requestedCount * 400);
   let attempts = 0;
-
-  /*
-  =========================================================
-   SMART GENERATION LOOP
-   --------------------------------------------------------
-   - Keeps trying to reach the requested count
-   - Prevents exact duplicates
-   - Gives generators enough attempts
-   - Does not depend on the user answering questions
-   - Every Generate request is independent
-  =========================================================
-  */
-
-  const maxAttempts = Math.max(
-    requestedCount * 250,
-    500
-  );
-
-  while (
-    questions.length < requestedCount &&
-    attempts < maxAttempts
-  ) {
+  let textbook = { available: false, grounded: false, learningObjectives: [] };
+  try { textbook = getKnowledgeContext({ grade: normalizedGrade, subject: normalizedSubject, topic }); } catch (_) {}
+  while (results.length < requestedCount && attempts < maxAttempts) {
     attempts++;
-
-    let generated;
-
-    /*
-      Mathematics
-    */
-
-    if (
-      String(subject)
-        .toLowerCase() ===
-        "mathematics" ||
-      String(subject)
-        .toLowerCase() ===
-        "math"
-    ) {
-      generated =
-        generateMath(
-          topic,
-          difficulty,
-          level
-        );
-    }
-
-    /*
-      All other subjects
-    */
-
-    else {
-      generated =
-        generateScience(
-          subject,
-          topic,
-          difficulty,
-          level
-        );
-    }
-
-    /*
-      Generator failed.
-      Try again instead of stopping.
-    */
-
-    if (!generated) {
-      continue;
-    }
-
-    /*
-      Convert to the requested
-      question type.
-    */
-
-    generated =
-      convertQuestion(
-        generated,
-        questionType
-      );
-
-    /*
-      Duplicate detection happens
-      AFTER conversion so that the
-      actual displayed question is
-      what gets compared.
-    */
-
-    const normalized =
-      cleanText(
-        generated.question
-      );
-
-    if (
-      used.has(normalized)
-    ) {
-      continue;
-    }
-
-    used.add(normalized);
-
-    /*
-      Store the generated question.
-    */
-
-    questions.push({
-      id: makeId(),
-
-      subject,
-
-      topic:
-        generated.topic ||
-        topic,
-
-      level,
-
-      difficulty,
-
-      questionType:
-        generated.questionType ||
-        questionType ||
-        "Multiple Choice",
-
-      question:
-        generated.question,
-
-      options:
-        generated.options ||
-        [],
-
-      answer:
-        generated.answer,
-
-      explanation:
-        generated.explanation ||
-        "Review the underlying concept and work through the problem carefully.",
-
-      learningObjective:
-        generated.learningObjective ||
-        "Apply the relevant concept correctly.",
-    });
+    let q;
+    try { q = normalizedSubject === "Mathematics" ? generateMath(topic, difficulty, normalizedGrade) : generateScience(normalizedSubject, topic, difficulty, normalizedGrade); } catch (_) { continue; }
+    if (!q) continue;
+    const type = String(questionType || "Multiple Choice");
+    q = type.toLowerCase() === "mixed" ? transformQuestion(q, makeMixedType(results.length)) : transformQuestion(q, type);
+    q = { ...q, id: makeId(), subject: normalizedSubject, grade: normalizedGrade, level: normalizedGrade, difficulty, topic: q.topic || topic, textbookAvailable: Boolean(textbook.available), textbookGrounded: Boolean(textbook.grounded) };
+    if (textbook.learningObjectives?.length) q.learningObjective = textbook.learningObjectives[0];
+    const check = validateQuestion(q);
+    if (!check.valid) continue;
+    const sig = signature(q.question);
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    results.push(q);
   }
-
-  return questions;
+  if (results.length !== requestedCount) throw new Error("Unable to generate the requested " + requestedCount + " unique questions for " + normalizedGrade + " " + normalizedSubject + " / " + topic + ". Generated " + results.length + ".");
+  return results;
 }
 
 /* ========================================================
