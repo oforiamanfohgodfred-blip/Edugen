@@ -1,0 +1,44 @@
+name: Apply EduGen engine upgrade
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade-engine:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply EduGen Expert engine upgrade') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply engine patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat engine_upgrade.patch.1 engine_upgrade.patch.2 engine_upgrade.patch.3 > engine_upgrade.patch
+          git apply --check engine_upgrade.patch
+          git apply engine_upgrade.patch
+          node --check backend/services/questionEngine.js
+
+      - name: Commit upgraded engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f engine_upgrade.patch.1 engine_upgrade.patch.2 engine_upgrade.patch.3 engine_upgrade.patch
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/services/questionEngine.js .github/workflows/apply-engine-upgrade.yml
+          git rm --cached --ignore-unmatch engine_upgrade.patch.1 engine_upgrade.patch.2 engine_upgrade.patch.3 || true
+          git add -u
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Upgrade EduGen Expert question engine"
+          git push origin main
