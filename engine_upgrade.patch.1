@@ -1,0 +1,968 @@
+--- a/backend/services/questionEngine.js
++++ b/backend/services/questionEngine.js
+@@ -75,6 +75,18 @@
+     .replace(/\s+/g, " ")
+     .trim()
+     .toLowerCase();
++
++function normalizeSubject(subject) {
++  const value = String(subject || "").trim().toLowerCase();
++
++  if (value === "math" || value === "mathematics") return "Mathematics";
++  if (value === "bio" || value === "biology") return "Biology";
++  if (value === "physics") return "Physics";
++  if (value === "chem" || value === "chemistry") return "Chemistry";
++
++  return String(subject || "").trim();
++}
++
+ 
+ /* ========================================================
+    DIFFICULTY HELPERS
+@@ -2339,56 +2351,45 @@
+ /* ---------- ADVANCED RATIO ---------- */
+ 
+ function expertRatioReasoning() {
+-  const a = randomInt(2, 9);
+-  const b = randomInt(3, 12);
+-  const c = randomInt(4, 15);
+-
+-  const multiplier =
+-    randomInt(20, 100);
+-
+-  const originalTotal =
+-    (a + b + c) *
+-    multiplier;
+-
+-  const newA =
+-    a * multiplier +
+-    randomInt(5, 30);
+-
+-  const newB =
+-    b * multiplier;
+-
+-  const newC =
+-    c * multiplier;
+-
+-  const newTotal =
+-    newA + newB + newC;
++  const a = randomInt(2, 8);
++  const b = randomInt(3, 10);
++  const c = randomInt(4, 12);
++  const multiplier = randomInt(30, 120);
++
++  const originalA = a * multiplier;
++  const originalB = b * multiplier;
++  const originalC = c * multiplier;
++
++  const increase = randomInt(10, 50);
++  const decreaseB = randomInt(5, 25);
++
++  const newA = originalA + increase;
++  const newB = originalB - decreaseB;
++  const newC = originalC;
++
++  const newTotal = newA + newB + newC;
++  const answer = newTotal;
+ 
+   return {
+     topic: "Advanced Ratio",
+ 
+     question:
+-      `Three quantities are initially in the ratio ${a}:${b}:${c}.\n\n` +
+-      `Their total is ${originalTotal}.\n\n` +
+-      `The first quantity is then increased by ${newA -
+-        a * multiplier}.\n\n` +
+-      `The other two quantities remain unchanged.\n\n` +
++      `Three quantities are initially in the ratio ${a}:${b}:${c} and have a total of ${(a + b + c) * multiplier}.\n\n` +
++      `The first quantity increases by ${increase}, while the second quantity decreases by ${decreaseB}. ` +
++      `The third quantity is unchanged.\n\n` +
+       `What is the new total?`,
+ 
+     ...makeMCQ(
+-      fmt(newTotal),
+-      numericOptions(newTotal, 30),
+-      `The original quantities are:\n\n` +
+-        `${a} × ${multiplier} = ${a *
+-          multiplier}\n` +
+-        `${b} × ${multiplier} = ${newB}\n` +
+-        `${c} × ${multiplier} = ${newC}\n\n` +
+-        `The first quantity becomes ${newA}.\n\n` +
+-        `New total = ${newA} + ${newB} + ${newC}\n` +
+-        `= ${newTotal}.`
++      fmt(answer),
++      numericOptions(answer, Math.max(15, Math.round(answer * 0.04)), { difficulty: "Expert" }),
++      `One ratio part is ${multiplier}.\n\n` +
++        `Original quantities: ${originalA}, ${originalB}, ${originalC}.\n\n` +
++        `New quantities: ${newA}, ${newB}, ${newC}.\n\n` +
++        `New total = ${newA} + ${newB} + ${newC} = ${answer}.`
+     ),
+ 
+     learningObjective:
+-      "Use proportional reasoning and track changes in related quantities.",
++      "Use a ratio to reconstruct quantities, then apply independent changes and recompute the total.",
+   };
+ }
+ 
+@@ -2529,56 +2530,38 @@
+ /* ---------- PYTHAGORAS + REASONING ---------- */
+ 
+ function expertPythagoras() {
+-  const a =
+-    randomInt(10, 80);
+-
+-  const b =
+-    randomInt(10, 80);
+-
+-  const hypotenuse =
+-    Math.sqrt(
+-      a * a +
+-        b * b
+-    );
+-
+-  const answer =
+-    Math.round(
+-      hypotenuse * 100
+-    ) / 100;
++  const a = randomInt(12, 60);
++  const b = randomInt(12, 60);
++  const extra = randomInt(5, 30);
++
++  const diagonal = Math.sqrt(a * a + b * b);
++  const path = diagonal + extra;
++  const answer = Math.round(path * 100) / 100;
+ 
+   return {
+     topic: "Advanced Geometry",
+ 
+     question:
+       `A rectangular field has perpendicular sides of ${a} m and ${b} m.\n\n` +
+-      `A straight path is built from one corner to the opposite corner.\n\n` +
+-      `What is the length of the path?`,
++      `A diagonal path is constructed from one corner to the opposite corner. ` +
++      `A further ${extra} m of fencing is then added along the diagonal beyond the field.\n\n` +
++      `What is the total length of the diagonal path and extension?`,
+ 
+     ...makeMCQ(
+       `${fmt(answer)} m`,
+       [
+-        `${fmt(a + b)} m`,
+-        `${fmt(
+-          Math.abs(a - b)
+-        )} m`,
+-        `${fmt(
+-          Math.sqrt(
+-            a * a +
+-              b
+-          )
+-        )} m`,
++        `${fmt(diagonal)} m`,
++        `${fmt(a + b + extra)} m`,
++        `${fmt(Math.abs(a - b) + extra)} m`,
+       ],
+-      `The diagonal forms a right-angled triangle.\n\n` +
+-        `Using Pythagoras:\n\n` +
+-        `c² = a² + b²\n\n` +
+-        `c² = ${a}² + ${b}²\n` +
+-        `c = √(${a * a +
+-          b * b})\n` +
+-        `c ≈ ${fmt(answer)} m.`
++      `First find the field diagonal:\n` +
++        `d = √(${a}² + ${b}²) ≈ ${fmt(diagonal)} m.\n\n` +
++        `Then add the extension:\n` +
++        `${fmt(diagonal)} + ${extra} = ${fmt(answer)} m.`
+     ),
+ 
+     learningObjective:
+-      "Apply Pythagoras' theorem to real-world geometry.",
++      "Combine Pythagoras' theorem with a second-stage length calculation.",
+   };
+ }
+ 
+@@ -2719,89 +2702,71 @@
+ /* ---------- EXPERT INDICES ---------- */
+ 
+ function expertIndices() {
+-  const base =
+-    randomInt(2, 8);
+-
+-  const a =
+-    randomInt(2, 6);
+-
+-  const b =
+-    randomInt(2, 5);
+-
+-  const exponent =
+-    a * b;
+-
+-  const answer =
+-    base ** exponent;
++  const base = randomInt(2, 6);
++  const p = randomInt(2, 5);
++  const q = randomInt(2, 4);
++  const r = randomInt(1, 3);
++
++  const exponent = p * q - r;
++  const answer = base ** exponent;
+ 
+   return {
+     topic: "Advanced Indices",
+ 
+     question:
+       `Simplify and evaluate:\n\n` +
+-      `(${base}^${a})^${b}`,
++      `(${base}^${p})^${q} ÷ ${base}^${r}\n\n` +
++      `Give the exact numerical value.`,
+ 
+     ...makeMCQ(
+       fmt(answer),
+-      numericOptions(answer, Math.max(10, answer * 0.1)),
+-      `Use the power-of-a-power law:\n\n` +
+-        `(aᵐ)ⁿ = aᵐⁿ\n\n` +
+-        `Therefore:\n` +
+-        `(${base}^${a})^${b} = ${base}^(${a} × ${b})\n` +
+-        `= ${base}^${exponent}\n` +
+-        `= ${answer}.`
++      numericOptions(
++        answer,
++        Math.max(10, Math.round(Math.abs(answer) * 0.08)),
++        { difficulty: "Expert" }
++      ),
++      `First apply the power-of-a-power law:\n` +
++      `(${base}^${p})^${q} = ${base}^(${p} × ${q}) = ${base}^${p * q}.\n\n` +
++      `Then divide powers with the same base:\n` +
++      `${base}^${p * q} ÷ ${base}^${r} = ${base}^(${p * q} - ${r})\n` +
++      `= ${base}^${exponent} = ${answer}.`
+     ),
+ 
+     learningObjective:
+-      "Apply laws of indices involving powers of powers.",
++      "Combine multiple laws of indices in a multi-step expression.",
+   };
+ }
+ 
+ /* ---------- EXPERT LOGARITHMS ---------- */
+ 
+ function expertLogarithms() {
+-  const base =
+-    randomItem([
+-      2,
+-      3,
+-      5,
+-      10,
+-    ]);
+-
+-  const x =
+-    randomInt(2, 8);
+-
+-  const y =
+-    randomInt(1, 5);
+-
+-  /*
+-    log_base(base^x * base^y)
+-    = x + y
+-  */
+-
+-  const answer =
+-    x + y;
++  const base = randomItem([2, 3, 5, 10]);
++  const x = randomInt(2, 6);
++  const y = randomInt(1, 4);
++  const z = randomInt(1, 3);
++
++  const exponent = x + y - z;
++  const value = base ** exponent;
+ 
+   return {
+     topic: "Advanced Logarithms",
+ 
+     question:
+       `Evaluate:\n\n` +
+-      `log₍${base}₎(${base}^${x} × ${base}^${y})`,
++      `log₍${base}₎((${base}^${x} × ${base}^${y}) ÷ ${base}^${z})\n\n` +
++      `Give the exact value.`,
+ 
+     ...makeMCQ(
+-      fmt(answer),
+-      numericOptions(answer, 4),
+-      `Use:\n\n` +
+-        `logₐ(mn) = logₐ(m) + logₐ(n)\n\n` +
+-        `Therefore:\n` +
+-        `log₍${base}₎(${base}^${x}) + log₍${base}₎(${base}^${y})\n` +
+-        `= ${x} + ${y}\n` +
+-        `= ${answer}.`
++      fmt(exponent),
++      numericOptions(exponent, 5, { difficulty: "Expert" }),
++      `Use the logarithm laws:\n\n` +
++      `logₐ(mn) = logₐ(m) + logₐ(n)\n` +
++      `logₐ(m/n) = logₐ(m) - logₐ(n)\n\n` +
++      `Therefore the exponent is ${x} + ${y} - ${z} = ${exponent}.`
+     ),
+ 
+     learningObjective:
+-      "Apply logarithm laws to simplify expressions.",
++      "Combine product and quotient logarithm laws with exponent relationships.",
+   };
+ }
+ 
+@@ -2917,31 +2882,112 @@
+ 
+ /* ---------- EXPERT QUESTION SELECTOR ---------- */
+ 
++
++/* ---------- EXPERT SIMULTANEOUS EQUATIONS ---------- */
++
++function expertSimultaneousEquations() {
++  let x = randomInt(-30, 30);
++  let y = randomInt(-30, 30);
++
++  let a = randomInt(2, 12);
++  let b = randomInt(2, 12);
++  let c = randomInt(2, 12);
++  let d = randomInt(2, 12);
++
++  while (a * d === b * c) {
++    d = randomInt(2, 15);
++  }
++
++  const e = a * x + b * y;
++  const f = c * x + d * y;
++
++  const target = randomItem([
++    "x",
++    "y",
++    "sum",
++    "difference",
++  ]);
++
++  let answer;
++  let ending;
++
++  if (target === "x") {
++    answer = x;
++    ending = "Determine x.";
++  } else if (target === "y") {
++    answer = y;
++    ending = "Determine y.";
++  } else if (target === "sum") {
++    answer = x + y;
++    ending = "Determine x + y without reporting the two values separately.";
++  } else {
++    answer = x - y;
++    ending = "Determine x - y.";
++  }
++
++  return {
++    topic: "Advanced Simultaneous Equations",
++
++    question:
++      `Two variables satisfy the system:\n\n` +
++      `${a}x + ${b}y = ${e}\n` +
++      `${c}x + ${d}y = ${f}\n\n` +
++      `${ending}\n\n` +
++      `Choose the value that satisfies both equations.`,
++
++    ...makeMCQ(
++      fmt(answer),
++      numericOptions(
++        answer,
++        Math.max(8, Math.abs(answer) + 5),
++        { difficulty: "Expert" }
++      ),
++      `Use elimination or substitution. The unique solution is x = ${x}, y = ${y}.\n\n` +
++        `Therefore the required value is ${answer}.`
++    ),
++
++    learningObjective:
++      "Solve a simultaneous system and extract a requested relationship from the solution.",
++  };
++}
++
+ function generateExpertMath(topic) {
+   const t =
+     String(topic || "")
+       .toLowerCase();
+ 
+-  /*
+-    Topic-specific Expert generators.
+-  */
+-
+-  if (t.includes("linear") || t.includes("algebra")) {
++  if (
++    t.includes("linear") ||
++    t.includes("algebra")
++  ) {
+     return randomItem([
+       expertMultiStepAlgebra,
+       expertFractionEquation,
+     ])();
+   }
+ 
++  if (
++    t.includes("simultaneous") ||
++    t.includes("system")
++  ) {
++    return expertSimultaneousEquations();
++  }
++
+   if (t.includes("quadratic")) {
+     return expertQuadraticReasoning();
+   }
+ 
+-  if (t.includes("percent")) {
++  if (
++    t.includes("percent") ||
++    t.includes("percentage")
++  ) {
+     return expertCompoundPercentage();
+   }
+ 
+-  if (t.includes("ratio")) {
++  if (
++    t.includes("ratio") ||
++    t.includes("proportion")
++  ) {
+     return expertRatioReasoning();
+   }
+ 
+@@ -2949,9 +2995,7 @@
+     return expertProbability();
+   }
+ 
+-  if (
+-    t.includes("sequence")
+-  ) {
++  if (t.includes("sequence")) {
+     return expertSequence();
+   }
+ 
+@@ -2962,9 +3006,7 @@
+     return expertTrigonometry();
+   }
+ 
+-  if (
+-    t.includes("function")
+-  ) {
++  if (t.includes("function")) {
+     return expertFunctions();
+   }
+ 
+@@ -2975,34 +3017,31 @@
+     return expertIndices();
+   }
+ 
++  if (t.includes("log")) {
++    return expertLogarithms();
++  }
++
+   if (
+-    t.includes("log")
+-  ) {
+-    return expertLogarithms();
+-  }
+-
+-  if (
+-    t.includes("statistic")
++    t.includes("statistic") ||
++    t.includes("mean") ||
++    t.includes("average")
+   ) {
+     return expertStatistics();
+   }
+ 
+   if (
+     t.includes("geometry") ||
+-    t.includes("pythag")
++    t.includes("pythag") ||
++    t.includes("area") ||
++    t.includes("perimeter")
+   ) {
+     return expertPythagoras();
+   }
+-
+-  /*
+-    Broad Expert Mathematics:
+-    randomly select from genuinely
+-    multi-step generators.
+-  */
+ 
+   return randomItem([
+     expertMultiStepAlgebra,
+     expertFractionEquation,
++    expertSimultaneousEquations,
+     expertQuadraticReasoning,
+     expertCompoundPercentage,
+     expertRatioReasoning,
+@@ -3480,35 +3519,330 @@
+ /* ========================================================
+    SCIENCE GENERATOR
+ ======================================================== */
++
++/* ========================================================
++   EXPERT SCIENCE ENGINE
++   --------------------------------------------------------
++   Dynamic multi-step generators for the main science
++   subjects. These are used only at Expert difficulty.
++======================================================== */
++
++function generateExpertScience(
++  subject,
++  topic
++) {
++  const s = normalizeSubject(subject);
++  const t = String(topic || "").toLowerCase();
++
++  if (s === "Physics") {
++    if (t.includes("motion")) {
++      const u = randomInt(10, 80);
++      const a = randomInt(3, 15);
++      const time = randomInt(4, 20);
++      const v = u + a * time;
++      const distance = u * time + 0.5 * a * time * time;
++
++      return {
++        topic: "Motion",
++        question:
++          `A vehicle has an initial velocity of ${u} m/s and accelerates uniformly at ${a} m/s² for ${time} s.\n\n` +
++          `Determine both its final velocity and the distance travelled.`,
++        ...makeMCQ(
++          `v = ${fmt(v)} m/s; s = ${fmt(distance)} m`,
++          [
++            `v = ${fmt(v)} m/s; s = ${fmt(u * time)} m`,
++            `v = ${fmt(u + a)} m/s; s = ${fmt(distance)} m`,
++            `v = ${fmt(v)} m/s; s = ${fmt(0.5 * a * time * time)} m`,
++          ],
++          `Use v = u + at:\n` +
++            `v = ${u} + ${a}(${time}) = ${v} m/s.\n\n` +
++            `Then s = ut + ½at²:\n` +
++            `s = ${u}(${time}) + ½(${a})(${time})² = ${fmt(distance)} m.`
++        ),
++        learningObjective:
++          "Combine two SUVAT equations in a multi-step motion problem.",
++      };
++    }
++
++    if (t.includes("energy")) {
++      const mass = randomInt(10, 100);
++      const height = randomInt(5, 40);
++      const velocity = randomInt(5, 30);
++      const g = 10;
++      const pe = mass * g * height;
++      const ke = 0.5 * mass * velocity * velocity;
++      const total = pe + ke;
++
++      return {
++        topic: "Energy",
++        question:
++          `An object of mass ${mass} kg is ${height} m above the ground and moves at ${velocity} m/s.\n\n` +
++          `Take g = 10 m/s². Calculate its total mechanical energy.`,
++        ...makeMCQ(
++          `${fmt(total)} J`,
++          [
++            `${fmt(pe)} J`,
++            `${fmt(ke)} J`,
++            `${fmt(pe - ke)} J`,
++          ],
++          `Gravitational potential energy = mgh = ${pe} J.\n` +
++            `Kinetic energy = ½mv² = ${fmt(ke)} J.\n\n` +
++            `Total = ${pe} + ${fmt(ke)} = ${fmt(total)} J.`
++        ),
++        learningObjective:
++          "Combine gravitational potential and kinetic energy in one calculation.",
++      };
++    }
++
++    if (t.includes("electric")) {
++      const r1 = randomInt(2, 12);
++      const r2 = randomInt(2, 12);
++      const voltage = randomInt(12, 48);
++      const resistance = r1 + r2;
++      const current = voltage / resistance;
++      const power = voltage * current;
++
++      return {
++        topic: "Electricity",
++        question:
++          `Two resistors of ${r1} Ω and ${r2} Ω are connected in series to a ${voltage} V supply.\n\n` +
++          `Calculate the circuit current and total power.`,
++        ...makeMCQ(
++          `I = ${fmt(current)} A; P = ${fmt(power)} W`,
++          [
++            `I = ${fmt(voltage / r1)} A; P = ${fmt(power)} W`,
++            `I = ${fmt(current)} A; P = ${fmt(voltage * voltage / r1)} W`,
++            `I = ${fmt(voltage / resistance)} A; P = ${fmt(voltage * resistance)} W`,
++          ],
++          `Series resistance = ${r1} + ${r2} = ${resistance} Ω.\n` +
++            `I = V/R = ${voltage}/${resistance} = ${fmt(current)} A.\n` +
++            `P = VI = ${voltage} × ${fmt(current)} = ${fmt(power)} W.`
++        ),
++        learningObjective:
++          "Combine series resistance, Ohm's law and electrical power.",
++      };
++    }
++
++    if (t.includes("momentum")) {
++      const m1 = randomInt(2, 10);
++      const m2 = randomInt(2, 10);
++      const u1 = randomInt(5, 20);
++      const u2 = -randomInt(2, 10);
++      const finalV = (m1 * u1 + m2 * u2) / (m1 + m2);
++
++      return {
++        topic: "Momentum",
++        question:
++          `Two objects collide and stick together. Object A has mass ${m1} kg and velocity ${u1} m/s. ` +
++          `Object B has mass ${m2} kg and velocity ${u2} m/s in the opposite direction.\n\n` +
++          `Find their common velocity after collision.`,
++        ...makeMCQ(
++          `${fmt(finalV)} m/s`,
++          numericOptions(finalV, 3, { difficulty: "Expert" }),
++          `Conservation of momentum:\n` +
++            `m₁u₁ + m₂u₂ = (m₁ + m₂)v.\n\n` +
++            `Therefore v = [${m1}(${u1}) + ${m2}(${u2})] / ${m1 + m2} = ${fmt(finalV)} m/s.`
++        ),
++        learningObjective:
++          "Apply conservation of momentum to a multi-object collision.",
++      };
++    }
++  }
++
++  if (s === "Chemistry") {
++    if (t.includes("mole")) {
++      const mass = randomInt(20, 250);
++      const molarMass = randomInt(20, 100);
++      const moles = mass / molarMass;
++      const particles = moles * 6.022e23;
++
++      return {
++        topic: "Moles",
++        question:
++          `A sample has mass ${mass} g and molar mass ${molarMass} g/mol.\n\n` +
++          `Calculate the amount in moles and the approximate number of particles.`,
++        ...makeMCQ(
++          `${fmt(moles, 3)} mol; ${particles.toExponential(3)} particles`,
++          [
++            `${fmt(moles, 3)} mol; ${(mass * 6.022e23).toExponential(3)} particles`,
++            `${fmt(mass / (molarMass * 2), 3)} mol; ${(particles / 2).toExponential(3)} particles`,
++            `${fmt(molarMass / mass, 3)} mol; ${(6.022e23 / moles).toExponential(3)} particles`,
++          ],
++          `n = m/M = ${mass}/${molarMass} = ${fmt(moles, 3)} mol.\n` +
++            `Number of particles = n × 6.022 × 10²³ ≈ ${particles.toExponential(3)}.`
++        ),
++        learningObjective:
++          "Connect mass, molar mass, amount of substance and particle number.",
++      };
++    }
++
++    if (t.includes("atomic")) {
++      const protons = randomInt(8, 25);
++      const neutrons = randomInt(8, 30);
++      const charge = randomItem([-2, -1, 1, 2]);
++      const electrons = protons - charge;
++      const massNumber = protons + neutrons;
++
++      return {
++        topic: "Atomic Structure",
++        question:
++          `An ion has ${protons} protons, ${neutrons} neutrons and a charge of ${charge > 0 ? "+" : ""}${charge}.\n\n` +
++          `Determine its mass number and number of electrons.`,
++        ...makeMCQ(
++          `Mass number = ${massNumber}; electrons = ${electrons}`,
++          [
++            `Mass number = ${protons}; electrons = ${electrons}`,
++            `Mass number = ${massNumber}; electrons = ${protons}`,
++            `Mass number = ${neutrons}; electrons = ${electrons}`,
++          ],
++          `Mass number = protons + neutrons = ${protons} + ${neutrons} = ${massNumber}.\n` +
++            `For a charge of ${charge}, electrons = protons − charge = ${electrons}.`
++        ),
++        learningObjective:
++          "Relate proton number, neutron number, charge and electron number.",
++      };
++    }
++
++    if (t.includes("electro")) {
++      const current = randomInt(2, 10);
++      const time = randomInt(60, 600);
++      const charge = current * time;
++
++      return {
++        topic: "Electrochemistry",
++        question:
++          `An electrolytic cell carries a current of ${current} A for ${time} s.\n\n` +
++          `How much electric charge passes through the cell?`,
++        ...makeMCQ(
++          `${charge} C`,
++          numericOptions(charge, Math.max(20, Math.round(charge * 0.1)), { difficulty: "Expert" }),
++          `Use Q = It.\nQ = ${current} × ${time} = ${charge} C.`
++        ),
++        learningObjective:
++          "Use the relationship between current, time and charge in electrochemistry.",
++      };
++    }
++  }
++
++  if (s === "Biology") {
++    if (t.includes("genetic")) {
++      const trait = randomItem([
++        ["T", "t", "height"],
++        ["B", "b", "fur colour"],
++        ["R", "r", "seed shape"],
++        ["P", "p", "flower colour"],
++        ["A", "a", "a simplified inherited trait"],
++      ]);
++
++      const dominant = trait[0];
++      const recessive = trait[1];
++      const traitName = trait[2];
++
++      const target = randomItem([
++        "recessive",
++        "heterozygous",
++        "dominant phenotype",
++        "homozygous dominant",
++      ]);
++
++      const answers = {
++        recessive: "1/4",
++        heterozygous: "1/2",
++        "dominant phenotype": "3/4",
++        "homozygous dominant": "1/4",
++      };
++
++      const answer = answers[target];
++
++      return {
++        topic: "Genetics",
++        question:
++          `In a simplified inheritance model, ${dominant} is dominant over ${recessive} for ${traitName}.\n\n` +
++          `Two heterozygous parents are crossed: ${dominant}${recessive} × ${dominant}${recessive}.\n\n` +
++          `What fraction of the offspring are expected to be ${target}?`,
++        ...makeMCQ(
++          answer,
++          [
++            target === "heterozygous" ? "1/4" : "1/2",
++            target === "dominant phenotype" ? "1/2" : "3/4",
++            target === "recessive" ? "3/4" : "1/4",
++          ],
++          `The possible genotypes are ${dominant}${dominant}, ${dominant}${recessive}, ${dominant}${recessive}, and ${recessive}${recessive}.\n\n` +
++            `Therefore the required fraction is ${answer}.`
++        ),
++        learningObjective:
++          "Use a monohybrid cross to distinguish genotype probabilities from phenotype probabilities.",
++      };
++    }
++
++    if (t.includes("cell")) {
++      return {
++        topic: "Cell Biology",
++        question:
++          `A plant cell is placed in a solution with a lower water potential than the cell contents.\n\n` +
++          `Predict the direction of water movement and explain the likely effect on the cell.`,
++        ...makeMCQ(
++          "Water leaves the cell; the cell becomes plasmolysed",
++          [
++            "Water enters the cell; the cell becomes plasmolysed",
++            "No water moves because osmosis stops",
++            "Water leaves the cell; the cell becomes turgid",
++          ],
++          `Water moves by osmosis from higher to lower water potential.\n` +
++            `Because the external solution has lower water potential, water leaves the cell and the membrane pulls away from the cell wall as plasmolysis develops.`
++        ),
++        learningObjective:
++          "Apply water-potential reasoning to osmosis in plant cells.",
++      };
++    }
++  }
++
++  return null;
++}
++
+ function generateScience(
+   subject,
+   topic,
+   difficulty,
+   level
+ ) {
++  const normalizedSubject =
++    normalizeSubject(subject);
++
++  const currentLevel =
++    normalizeLevel(level);
++
++  const currentDifficulty =
++    normalizeDifficulty(difficulty);
++
++  const topicKey =
++    String(topic || "")
++      .trim()
++      .toLowerCase();
++
++  /*
++    Expert science gets genuinely dynamic,
++    multi-step questions before the smaller
++    concept bank is considered.
++  */
++  if (currentDifficulty === "Expert") {
++    const expert = generateExpertScience(
++      normalizedSubject,
++      topicKey
++    );
++
++    if (expert) {
++      return expert;
++    }
++  }
++
++  /*
++    Advanced calculations.
++  */
++  if (normalizedSubject === "Physics") {
++    const advanced =
++      advancedPhysics(
++        topicKey,
++        currentDifficulty
++      );
++
++    if (advanced) {
++      return advanced;
++    }
++  }
++
++  if (normalizedSubject === "Chemistry") {
++    const advanced =
++      advancedChemistry(
++        topicKey,
++        currentDifficulty
++      );
++
++    if (advanced) {
++      return advanced;
++    }
++  }
++
++  const subjectBank =
++    scienceBanks[
++      normalizedSubject
++    ];
++
++  if (!subjectBank) {
++    return null;
++  }
++
++  /*
++    Find the requested topic.
++    Exact and normalized partial matches
++    are allowed, but an unknown topic no
++    longer silently becomes an unrelated
++    question.
++  */
++  let pool = null;
++
++  const exactKey =
++    Object.keys(subjectBank)
++      .find(
++        (key) =>
++          key.toLowerCase() ===
++          topicKey
++      );
++
++  if (exactKey) {
++    pool =
++      subjectBank[exactKey];
++  }
++
++  if (!pool && topicKey) {
++    const matchingTopic =
++      Object.keys(subjectBank)
++        .find((key) => {
++          const k =
++            key.toLowerCase();
++
++          return (
++            k.includes(topicKey) ||
++            topicKey.includes(k)
++          );
++        });
++
++    if (matchingTopic) {
++      pool =
++        subjectBank[matchingTopic];
++    }
++  }
++
++  if (!pool && !topicKey) {
++    pool =
++      Object.values(
++        subjectBank
++      ).flat();
++  }
++
++  if (!pool || pool.length === 0) {
++    return null;
++  }
++
++  const base =
++    randomItem(pool);
++
++  let question =
++    base.q;
++
++  let options =
++    base.o;
++
++  let answer =
++    base.a;
++
++  let explanation =
++    base.e;
++
++  const isJHS =
++    currentLevel === "JHS";
++
++  const isUniversity =
++    currentLevel === "University";
++
++  if (isJHS) {
++    if (
++      currentDifficulty === "Hard"
++    ) {
++      question =
++        `${question}\n\nWhich conclusion is best supported by the evidence or scientific principle involved?`;
++
++      explanation +=
++        `\n\nFocus on identifying the scientific principle and applying it to the situation.`;
++    }
++  } else if (!isUniversity) {
++    if (
++      currentDifficulty === "Hard"
++    ) {
++      question =
++        `${question}\n\nWhich conclusion is most scientifically justified?`;
++
++      explanation +=
++        `\n\nIdentify the underlying principle and apply it rather than relying only on recall.`;
++    }
++  } else {
++    question =
++      `UNIVERSITY-LEVEL ANALYSIS\n\n` +
++      `Consider the following scientific problem:\n\n` +
++      `${question}\n\n` +
++      `Which conclusion is most scientifically defensible based on the underlying mechanism?`;
++
++    explanation +=
++      `\n\nFocus on mechanism, assumptions and why the alternatives fail.`;
++  }
++
++  return {
++    topic:
++      topic || "General Science",
++    question,
++    options,
++    answer,
++    explanation,
++    learningObjective:
++      "Apply the relevant scientific principle and interpret the situation correctly.",
++  };
++}
++
