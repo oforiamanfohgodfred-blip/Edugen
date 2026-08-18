@@ -35,6 +35,17 @@ for (const marker of requiredFunctions) {
   }
 }
 
+function replaceSection(source, startMarker, endMarker, replacement) {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start);
+
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error(`Could not locate section: ${startMarker}`);
+  }
+
+  return source.slice(0, start) + replacement + source.slice(end);
+}
+
 function replaceMainGenerator(source, replacement) {
   const start = source.indexOf("function generateQuestions({");
   const exportStart = source.indexOf("module.exports = {", start);
@@ -61,6 +72,90 @@ function ensureCurriculumRequire(source) {
     `${marker}\nconst { validateRequest } = require("./curriculumEngine");`
   );
 }
+
+const newLevelProfiles = `const levelProfiles = {
+  JHS: {
+    name: "JHS",
+    reasoningDepth: {
+      Easy: 1,
+      Medium: 2,
+      Hard: 3,
+      Expert: 5,
+    },
+    maxSteps: {
+      Easy: 1,
+      Medium: 2,
+      Hard: 3,
+      Expert: 5,
+    },
+    expertStyle: [
+      "multi-step reasoning",
+      "hidden relationships",
+      "careful interpretation",
+      "common-mistake traps",
+      "indirect information",
+    ],
+  },
+
+  SHS: {
+    name: "SHS",
+    reasoningDepth: {
+      Easy: 1,
+      Medium: 2,
+      Hard: 4,
+      Expert: 6,
+    },
+    maxSteps: {
+      Easy: 1,
+      Medium: 2,
+      Hard: 4,
+      Expert: 6,
+    },
+    expertStyle: [
+      "multi-concept reasoning",
+      "indirect calculation",
+      "algebraic manipulation",
+      "interpretation of data",
+      "common-mistake traps",
+      "reverse reasoning",
+    ],
+  },
+};
+
+`;
+
+const newNormalizeLevel = `function normalizeLevel(level) {
+  const value = String(level || "").trim().toLowerCase();
+
+  if (
+    value === "jhs1" ||
+    value === "jhs 1" ||
+    value === "b7" ||
+    value.includes("jhs") ||
+    value.includes("junior") ||
+    value.includes("middle school")
+  ) {
+    return "JHS";
+  }
+
+  if (
+    value === "shs1" ||
+    value === "shs 1" ||
+    value === "b10" ||
+    value.includes("shs") ||
+    value.includes("senior") ||
+    value.includes("high school")
+  ) {
+    return "SHS";
+  }
+
+  // University/tertiary is intentionally unsupported in EduGen v1.
+  // Unknown values fall back to SHS only for compatibility with old
+  // internal generator calls; public requests are blocked by curriculumEngine.
+  return "SHS";
+}
+
+`;
 
 const newGenerateQuestions = `function generateQuestions({
   subject,
@@ -166,7 +261,6 @@ const newGenerateQuestions = `function generateQuestions({
   }
 
   // Never silently return fewer questions than requested.
-  // The API can now distinguish a generation-capacity problem from success.
   if (questions.length < requestedCount) {
     const error = new Error(
       \`EduGen could only generate \${questions.length} unique question(s) out of \${requestedCount} requested for \${validation.grade} → \${validation.subject} → \${validation.topic} → \${normalizedDifficulty} → \${normalizedType}.\`
@@ -200,10 +294,24 @@ try {
   console.log(`✅ Backup created: ${backupPath}`);
 
   updated = ensureCurriculumRequire(updated);
-  updated = replaceMainGenerator(
+
+  // Replace the old JHS/SHS/University profile with JHS/SHS only.
+  updated = replaceSection(
     updated,
-    newGenerateQuestions
+    "const levelProfiles = {",
+    "/*\n=========================================================\n NORMALIZE ACADEMIC LEVEL",
+    newLevelProfiles
   );
+
+  // Replace the old level normalizer so University is no longer a valid path.
+  updated = replaceSection(
+    updated,
+    "function normalizeLevel(level) {",
+    "/*\n=========================================================\n NORMALIZE DIFFICULTY",
+    newNormalizeLevel
+  );
+
+  updated = replaceMainGenerator(updated, newGenerateQuestions);
 
   const tempPath = `${enginePath}.master-upgrade.tmp.js`;
   fs.writeFileSync(tempPath, updated, "utf8");
