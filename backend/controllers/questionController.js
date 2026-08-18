@@ -1,4 +1,4 @@
-const { generateQuestions: generateLocalQuestions } = require("../services/masterGenerationEngine");
+const { generateQuestions: generateLocalQuestions } = require("../services/stableGenerationEngine");
 const { validateQuestion, signature, transformQuestion, makeMixedType } = require("../services/questionQualityEngine");
 const { loadTextbook } = require("../services/textbookAdapter");
 
@@ -33,12 +33,16 @@ const generateQuestions = async (req, res) => {
     const requestedCount = Math.min(Math.max(Number(count) || 5, 1), 50);
     const normalizedType = normalizeRequestedType(questionType);
     const normalizedGrade = grade || level;
-    const target = { subject, topic, grade: normalizedGrade, level: normalizedGrade, difficulty, questionType: "Multiple Choice", count: Math.min(requestedCount, 50) };
 
     let textbookReference = { available: false };
     try {
       const book = loadTextbook(normalizedGrade, subject);
-      textbookReference = { available: Boolean(book.loaded), file: book.file || null, usedAsReference: Boolean(book.loaded), requiresOCR: Boolean(book.requiresOCR) };
+      textbookReference = {
+        available: Boolean(book && book.loaded),
+        file: book ? book.file || null : null,
+        usedAsReference: Boolean(book && book.loaded),
+        requiresOCR: Boolean(book && book.requiresOCR),
+      };
     } catch (bookError) {
       console.warn("Optional textbook reference unavailable:", bookError.message);
     }
@@ -49,12 +53,10 @@ const generateQuestions = async (req, res) => {
 
     for (let round = 0; round < maxRounds && questions.length < requestedCount; round += 1) {
       const remaining = requestedCount - questions.length;
-      const batchSize = Math.min(50, Math.max(remaining, 5));
-      const batch = generateLocalQuestions({ ...target, count: batchSize });
+      const batch = generateLocalQuestions({ subject, topic, grade: normalizedGrade, level: normalizedGrade, difficulty, count: remaining });
 
       for (const rawQuestion of Array.isArray(batch) ? batch : []) {
-        if (questions.length >= requestedCount) break;
-        if (!rawQuestion) continue;
+        if (questions.length >= requestedCount || !rawQuestion) break;
         const outputType = normalizedType === "Mixed" ? makeMixedType(questions.length) : normalizedType;
         const candidate = transformQuestion(rawQuestion, outputType);
         const validation = validateQuestion(candidate);
