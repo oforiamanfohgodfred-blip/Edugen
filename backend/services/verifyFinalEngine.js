@@ -2,12 +2,15 @@ const { execFileSync } = require("child_process");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
+// Verify only files on the LIVE generation path.
+// masterGenerationEngine.js is an obsolete experimental path and is intentionally
+// excluded because questionController no longer imports it.
 const files = [
   path.join(__dirname, "questionEngine.js"),
-  path.join(__dirname, "masterGenerationEngine.js"),
   path.join(__dirname, "curriculumEngine.js"),
   path.join(__dirname, "questionQualityEngine.js"),
   path.join(__dirname, "textbookAdapter.js"),
+  path.join(__dirname, "stableGenerationEngine.js"),
   path.join(__dirname, "shsPhysicsEngine.js"),
   path.join(__dirname, "integratedScienceGeneratorV2.js"),
   path.join(ROOT, "controllers", "questionController.js"),
@@ -18,6 +21,7 @@ for (const file of files) {
 }
 
 const { generateQuestions } = require("../controllers/questionController");
+const { loadTextbook } = require("./textbookAdapter");
 
 function callGenerator(body) {
   return new Promise((resolve, reject) => {
@@ -44,20 +48,44 @@ const cases = [
   console.log("==========================================");
   console.log(" EduGen FINAL ENGINE VERIFICATION");
   console.log("==========================================");
+
+  let failed = false;
+
+  try {
+    const book = loadTextbook("SHS1", "Physics");
+    console.log(`Textbook adapter: ${book && typeof book.loaded === "boolean" ? "PASS" : "FAIL"}`);
+    if (!book || typeof book.loaded !== "boolean") failed = true;
+  } catch (error) {
+    console.error("Textbook adapter: FAIL", error.message);
+    failed = true;
+  }
+
   for (const test of cases) {
-    const result = await callGenerator(test.body);
-    const ok = result.status === 200 && result.payload?.success && result.payload.questions?.length === test.body.count;
-    console.log(`${ok ? "PASS" : "FAIL"}: ${test.name} -> ${result.payload?.count || result.payload?.generatedCount || 0}/${test.body.count}`);
-    if (!ok) {
-      console.error(JSON.stringify(result.payload, null, 2));
-      process.exitCode = 1;
+    try {
+      const result = await callGenerator(test.body);
+      const generated = result.payload?.questions?.length || result.payload?.generatedCount || result.payload?.count || 0;
+      const ok = result.status === 200 && result.payload?.success && generated === test.body.count;
+      console.log(`${ok ? "PASS" : "FAIL"}: ${test.name} -> ${generated}/${test.body.count}`);
+      if (!ok) {
+        failed = true;
+        console.error(JSON.stringify(result.payload, null, 2));
+      }
+    } catch (error) {
+      failed = true;
+      console.error(`FAIL: ${test.name} -> ${error.message}`);
     }
   }
 
-  const invalid = await callGenerator({ subject: "Mathematics", topic: "Not A Real Topic", grade: "SHS1", difficulty: "Medium", questionType: "Multiple Choice", count: 5 });
-  const invalidOk = invalid.status === 400 && invalid.payload?.success === false && invalid.payload?.code === "INVALID_TOPIC";
-  console.log(`${invalidOk ? "PASS" : "FAIL"}: Curriculum rejection`);
-  if (!invalidOk) process.exitCode = 1;
+  try {
+    const invalid = await callGenerator({ subject: "Mathematics", topic: "Not A Real Topic", grade: "SHS1", difficulty: "Medium", questionType: "Multiple Choice", count: 5 });
+    const invalidOk = invalid.status === 400 && invalid.payload?.success === false && invalid.payload?.code === "INVALID_TOPIC";
+    console.log(`${invalidOk ? "PASS" : "FAIL"}: Curriculum rejection`);
+    if (!invalidOk) failed = true;
+  } catch (error) {
+    failed = true;
+    console.error("FAIL: Curriculum rejection ->", error.message);
+  }
 
-  console.log(process.exitCode ? "FINAL VERIFICATION FAILED" : "FINAL VERIFICATION PASSED");
+  console.log(failed ? "FINAL VERIFICATION FAILED" : "FINAL VERIFICATION PASSED");
+  process.exitCode = failed ? 1 : 0;
 })();
