@@ -70,4 +70,13 @@ function getKnowledgeContext({ grade, subject, topic } = {}) {
   return { available: true, grounded: Boolean(context), source: file, context, learningObjectives: objectives, requiresOCR: false };
 }
 
-module.exports = { TEXTBOOK_ROOT, getKnowledgeContext, findText };
+// Backward-compatible name used by the controller.
+function loadTextbook(grade, subject) {
+  const file = findText(grade, subject);
+  if (!file) return { loaded: false, file: null, content: "" };
+  if (/\.pdf$/i.test(file)) return { loaded: true, file, content: "", requiresOCR: true };
+  try { return { loaded: true, file, content: fs.readFileSync(file, "utf8"), requiresOCR: false }; }
+  catch { return { loaded: false, file, content: "" }; }
+}
+
+module.exports = { TEXTBOOK_ROOT, getKnowledgeContext, loadTextbook, findText, extractContext };
