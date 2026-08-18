@@ -15,14 +15,13 @@ function walk(dir, out = [], depth = 0) {
     if (entry.name.startsWith(".")) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full, out, depth + 1);
-    else if (/\.(txt|json)$/i.test(entry.name)) out.push(full);
+    else if (/\.(txt|json|pdf)$/i.test(entry.name)) out.push(full);
   }
   return out;
 }
 
 function gradeMatch(file, grade) {
-  const n = norm(file);
-  const g = norm(grade);
+  const n = norm(file), g = norm(grade);
   if (!g) return true;
   const aliases = {
     jhs1: ["jhs1", "basic 7", "b7"], jhs2: ["jhs2", "basic 8", "b8"], jhs3: ["jhs3", "basic 9", "b9"],
@@ -35,8 +34,7 @@ function gradeMatch(file, grade) {
 }
 
 function subjectMatch(file, subject) {
-  const n = norm(file);
-  const s = norm(subject);
+  const n = norm(file), s = norm(subject);
   if (!s) return true;
   if (s === "integrated science") return n.includes("science") && !n.includes("physics") && !n.includes("chemistry") && !n.includes("biology");
   if (s === "mathematics") return n.includes("math") || n.includes("mathematics");
@@ -56,9 +54,7 @@ function extractContext(text, topic) {
   const hits = [];
   for (let i = 0; i < lines.length && hits.length < 6; i++) {
     const line = norm(lines[i]);
-    if (terms.some((term) => line.includes(term))) {
-      hits.push(lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 2)).join(" "));
-    }
+    if (terms.some((term) => line.includes(term))) hits.push(lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 2)).join(" "));
   }
   return [...new Set(hits)].join("\n\n");
 }
@@ -66,11 +62,12 @@ function extractContext(text, topic) {
 function getKnowledgeContext({ grade, subject, topic } = {}) {
   const file = findText(grade, subject);
   if (!file) return { available: false, grounded: false, source: null, context: "", learningObjectives: [] };
+  if (/\.pdf$/i.test(file)) return { available: true, grounded: false, source: file, context: "", learningObjectives: [], requiresOCR: true };
   let text = "";
   try { text = fs.readFileSync(file, "utf8"); } catch { return { available: false, grounded: false, source: file, context: "", learningObjectives: [] }; }
   const context = extractContext(text, topic);
   const objectives = text.split(/\r?\n/).map((x) => x.trim()).filter((x) => /^(learning objective|objective|learning outcome)/i.test(x)).slice(0, 10);
-  return { available: true, grounded: Boolean(context), source: file, context, learningObjectives: objectives };
+  return { available: true, grounded: Boolean(context), source: file, context, learningObjectives: objectives, requiresOCR: false };
 }
 
 module.exports = { TEXTBOOK_ROOT, getKnowledgeContext, findText };
