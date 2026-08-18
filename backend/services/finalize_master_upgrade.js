@@ -18,6 +18,14 @@ source = source.replace(
   'const { getKnowledgeContext } = require("./textbookAdapter");'
 );
 
+const oldBankLine = `  const subjectBank =\n    scienceBanks[subject];`;
+const newBankLine = `  const subjectBank =\n    subject === "Integrated Science"\n      ? Object.assign({}, ...Object.values(scienceBanks))\n      : scienceBanks[subject];`;
+if (source.includes(oldBankLine)) {
+  source = source.replace(oldBankLine, newBankLine);
+} else if (!source.includes('subject === "Integrated Science"')) {
+  throw new Error("Could not locate science bank routing line; refusing to continue.");
+}
+
 const temp = `${engine}.finalizer.tmp.js`;
 fs.writeFileSync(temp, source, "utf8");
 execFileSync(process.execPath, ["--check", temp], { stdio: "inherit" });
@@ -31,6 +39,7 @@ console.log("Subjects: Math + JHS Integrated Science + SHS Physics/Chemistry/Bio
 console.log("University: removed");
 console.log("Question types: MCQ + Short Answer + Problem Solving + True/False + Word Problems + Mixed");
 console.log("Textbook adapter: enabled");
+console.log("Integrated Science bank: enabled");
 console.log("Duplicate protection: enabled");
 console.log("Requested-count protection: enabled");
 console.log("Expert reasoning profiles: enabled");
