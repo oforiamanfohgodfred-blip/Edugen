@@ -42,6 +42,17 @@ const difficultyInfo = { Easy: "Build your foundation", Medium: "Apply what you 
 const questionTypes = ["Multiple Choice", "Short Answer", "Problem Solving", "Word Problem", "Mixed"];
 const grades = Object.keys(CURRICULUM);
 
+const normalizeAnswer = (value) => {
+  if (value === null || value === undefined) return "";
+  const raw = String(value).trim().replace(/,/g, "").replace(/\s+/g, " ").toLowerCase();
+  if (!raw) return "";
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) return String(numeric);
+  return raw.replace(/[−–—]/g, "-");
+};
+
+const answersMatch = (left, right) => normalizeAnswer(left) === normalizeAnswer(right);
+
 function App() {
   const [grade, setGrade] = useState("SHS1");
   const subjects = CURRICULUM[grade];
@@ -58,7 +69,7 @@ function App() {
 
   const score = useMemo(() => {
     if (!submitted) return 0;
-    return questions.reduce((total, q, i) => String(answers[i] ?? "").trim().toLowerCase() === String(q.answer ?? q.correctAnswer ?? "").trim().toLowerCase() ? total + 1 : total, 0);
+    return questions.reduce((total, q, i) => answersMatch(answers[i], q.answer ?? q.correctAnswer) ? total + 1 : total, 0);
   }, [submitted, questions, answers]);
 
   const resetQuiz = () => { setQuestions([]); setAnswers({}); setSubmitted(false); setError(""); };
@@ -114,14 +125,15 @@ function App() {
           {questions.map((q, index) => {
             const options = Array.isArray(q.options) ? q.options : [];
             const written = !options.length || questionType === "Short Answer" || questionType === "Problem Solving" || questionType === "Word Problem";
-            const correct = String(q.answer ?? q.correctAnswer ?? "").trim().toLowerCase();
-            const chosen = String(answers[index] ?? "").trim().toLowerCase();
+            const correctAnswer = q.answer ?? q.correctAnswer;
+            const chosen = answers[index];
+            const isCorrect = answersMatch(chosen, correctAnswer);
             return <article className="question-card" key={q.id || index}>
               <div className="question-number">Question {index + 1}</div>
               <h4>{q.question}</h4>
-              {options.length > 0 && !written && <div className="options">{options.map((option, oi) => <button key={oi} type="button" disabled={submitted} className={`option ${chosen === String(option).trim().toLowerCase() ? "selected" : ""} ${submitted && String(option).trim().toLowerCase() === correct ? "correct" : submitted && chosen === String(option).trim().toLowerCase() ? "wrong" : ""}`} onClick={() => selectAnswer(index, option)}>{String.fromCharCode(65 + oi)}. {option}</button>)}</div>}
+              {options.length > 0 && !written && <div className="options">{options.map((option, oi) => <button key={oi} type="button" disabled={submitted} className={`option ${answersMatch(chosen, option) ? "selected" : ""} ${submitted && answersMatch(option, correctAnswer) ? "correct" : submitted && answersMatch(chosen, option) ? "wrong" : ""}`} onClick={() => selectAnswer(index, option)}>{String.fromCharCode(65 + oi)}. {option}</button>)}</div>}
               {written && <input className="answer-input" disabled={submitted} value={answers[index] || ""} onChange={e => selectAnswer(index, e.target.value)} placeholder="Type your answer..." />}
-              {submitted && <div className={`answer-result ${chosen === correct ? "correct" : "wrong"}`}><strong>{chosen === correct ? "Correct ✓" : `Incorrect — correct answer: ${q.answer ?? q.correctAnswer ?? "See explanation"}`}</strong><p>{q.explanation || "Review the concept and work through the question again."}</p></div>}
+              {submitted && <div className={`answer-result ${isCorrect ? "correct" : "wrong"}`}><strong>{isCorrect ? "Correct ✓" : `Incorrect — correct answer: ${correctAnswer ?? "See explanation"}`}</strong><p>{q.explanation || "Review the concept and work through the question again."}</p></div>}
             </article>;
           })}
           {!submitted && <button className="generate-button" onClick={() => setSubmitted(true)}><FaCheckCircle /> Submit Quiz</button>}
