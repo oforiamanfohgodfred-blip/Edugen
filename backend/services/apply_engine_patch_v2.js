@@ -24,11 +24,29 @@ function findMatchingBrace(source, openIndex) {
   return -1;
 }
 
+function findFunctionBodyOpen(source, start) {
+  let parenDepth = 0, quote = null, escaped = false, lineComment = false, blockComment = false;
+  let seenParen = false;
+  for (let i = start; i < source.length; i++) {
+    const ch = source[i], next = source[i + 1];
+    if (lineComment) { if (ch === "\n") lineComment = false; continue; }
+    if (blockComment) { if (ch === "*" && next === "/") { blockComment = false; i++; } continue; }
+    if (quote) { if (escaped) escaped = false; else if (ch === "\\") escaped = true; else if (ch === quote) quote = null; continue; }
+    if (ch === "'" || ch === '"' || ch === "`") { quote = ch; continue; }
+    if (ch === "/" && next === "/") { lineComment = true; i++; continue; }
+    if (ch === "/" && next === "*") { blockComment = true; i++; continue; }
+    if (ch === "(") { seenParen = true; parenDepth++; continue; }
+    if (ch === ")" && seenParen) { parenDepth--; continue; }
+    if (seenParen && parenDepth === 0 && ch === "{") return i;
+  }
+  return -1;
+}
+
 function replaceFunction(source, functionName, replacement) {
   const marker = `function ${functionName}(`;
   const start = source.indexOf(marker);
   if (start === -1) throw new Error(`Could not locate function: ${functionName}`);
-  const open = source.indexOf("{", start);
+  const open = findFunctionBodyOpen(source, start + marker.length - 1);
   if (open === -1) throw new Error(`Could not locate body for: ${functionName}`);
   const close = findMatchingBrace(source, open);
   if (close === -1) throw new Error(`Could not locate closing brace for: ${functionName}`);
