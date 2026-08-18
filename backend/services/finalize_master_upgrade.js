@@ -26,6 +26,9 @@ if (source.includes(oldBankLine)) {
   throw new Error("Could not locate science bank routing line; refusing to continue.");
 }
 
+// Never return raw textbook excerpts to the frontend/API response.
+source = source.replace(/,\n\s*textbookContext:\n\s*textbook\.context \|\| null/, "");
+
 const temp = `${engine}.finalizer.tmp.js`;
 fs.writeFileSync(temp, source, "utf8");
 execFileSync(process.execPath, ["--check", temp], { stdio: "inherit" });
