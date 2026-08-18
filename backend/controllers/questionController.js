@@ -1,37 +1,29 @@
 const {
   generateQuestions: generateLocalQuestions,
 } = require("../services/masterGenerationEngine");
+const { validateQuestion, signature, transformQuestion, makeMixedType } = require("../services/questionQualityEngine");
+const { loadTextbook } = require("../services/textbookAdapter");
 
-const recentQuestions = [];
+const recentQuestions = new Set();
+const MAX_RECENT = 500;
 
-const normalize = (text) =>
-  String(text || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+function rememberSignature(value) {
+  recentQuestions.add(signature(value));
+  if (recentQuestions.size > MAX_RECENT) {
+    const first = recentQuestions.values().next().value;
+    if (first) recentQuestions.delete(first);
+  }
+}
 
-const isSimilar = (question) => {
-  const current = normalize(question);
-
-  return recentQuestions.some((old) => {
-    const previous = normalize(old);
-    if (current === previous) return true;
-
-    const currentWords = new Set(current.split(" "));
-    const previousWords = new Set(previous.split(" "));
-    let common = 0;
-
-    currentWords.forEach((word) => {
-      if (previousWords.has(word)) common++;
-    });
-
-    const similarity =
-      common / Math.max(currentWords.size, previousWords.size, 1);
-
-    return similarity >= 0.90;
-  });
-};
+function normalizeRequestedType(value) {
+  const raw = String(value || "Multiple Choice").trim().toLowerCase();
+  if (raw === "mixed") return "Mixed";
+  if (raw.includes("short")) return "Short Answer";
+  if (raw.includes("problem") && !raw.includes("word")) return "Problem Solving";
+  if (raw.includes("word")) return "Word Problem";
+  if (raw.includes("true") || raw.includes("false")) return "True/False";
+  return "Multiple Choice";
+}
 
 const generateQuestions = async (req, res) => {
   try {
@@ -52,31 +44,79 @@ const generateQuestions = async (req, res) => {
       });
     }
 
-    const requestedCount = Math.min(Math.max(Number(count) || 5, 1), 20);
-    const target = { subject, topic, grade: grade || level, level: grade || level, difficulty, questionType, count: requestedCount };
+    const requestedCount = Math.min(Math.max(Number(count) || 5, 1), 50);
+    const normalizedType = normalizeRequestedType(questionType);
+    const normalizedGrade = grade || level;
+    const target = {
+      subject,
+      topic,
+      grade: normalizedGrade,
+      level: normalizedGrade,
+      difficulty,
+      questionType: "Multiple Choice",
+      count: Math.min(requestedCount, 20),
+    };
+
+    // Textbooks are optional reference material. Their absence NEVER blocks generation.
+    let textbookReference = { available: false };
+    try {
+      const book = loadTextbook(normalizedGrade, subject);
+      textbookReference = {
+        available: Boolean(book.loaded),
+        file: book.file || null,
+        usedAsReference: Boolean(book.loaded),
+      };
+    } catch (bookError) {
+      console.warn("Optional textbook reference unavailable:", bookError.message);
+    }
+
     const questions = [];
+    const localSignatures = new Set();
+    const maxRounds = Math.max(10, Math.ceil(requestedCount / 5) * 3);
 
-    for (let attempt = 0; attempt < 8 && questions.length < requestedCount; attempt += 1) {
-      const batch = generateLocalQuestions({ ...target, count: requestedCount });
+    for (let round = 0; round < maxRounds && questions.length < requestedCount; round += 1) {
+      const remaining = requestedCount - questions.length;
+      const batchSize = Math.min(20, Math.max(remaining, 5));
+      const batch = generateLocalQuestions({ ...target, count: batchSize });
 
-      for (const question of batch) {
-        if (!question || isSimilar(question.question)) continue;
-        if (questions.some((existing) => normalize(existing.question) === normalize(question.question))) continue;
-
-        questions.push(question);
-        recentQuestions.push(question.question);
-        if (recentQuestions.length > 200) recentQuestions.shift();
+      for (const rawQuestion of Array.isArray(batch) ? batch : []) {
         if (questions.length >= requestedCount) break;
+        if (!rawQuestion) continue;
+
+        const outputType = normalizedType === "Mixed"
+          ? makeMixedType(questions.length)
+          : normalizedType;
+        const candidate = transformQuestion(rawQuestion, outputType);
+        const validation = validateQuestion(candidate);
+        if (!validation.valid) continue;
+
+        const key = signature(candidate.question);
+        if (localSignatures.has(key) || recentQuestions.has(key)) continue;
+
+        localSignatures.add(key);
+        rememberSignature(candidate.question);
+        questions.push({
+          ...candidate,
+          id: candidate.id || signature(candidate.question).slice(0, 16),
+          grade: candidate.grade || normalizedGrade,
+          level: candidate.level || normalizedGrade,
+          subject: candidate.subject || subject,
+          topic: candidate.topic || topic,
+          difficulty: candidate.difficulty || difficulty,
+          qualityChecked: true,
+          textbookReferenceAvailable: textbookReference.available,
+        });
       }
     }
 
     if (questions.length < requestedCount) {
       return res.status(422).json({
         success: false,
-        message: `The generator could only produce ${questions.length} unique questions for this grade, subject and topic. No duplicate questions were substituted.`,
+        message: `The generator could only produce ${questions.length} unique high-quality questions for this grade, subject and topic.`,
         requestedCount,
         generatedCount: questions.length,
         questions,
+        textbookReference,
       });
     }
 
@@ -84,6 +124,7 @@ const generateQuestions = async (req, res) => {
       success: true,
       source: "local",
       count: questions.length,
+      textbookReference,
       questions,
     });
   } catch (error) {
