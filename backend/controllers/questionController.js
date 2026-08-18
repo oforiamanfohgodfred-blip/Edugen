@@ -1,6 +1,4 @@
-const {
-  generateQuestions: generateLocalQuestions,
-} = require("../services/masterGenerationEngine");
+const { generateQuestions: generateLocalQuestions } = require("../services/masterGenerationEngine");
 const { validateQuestion, signature, transformQuestion, makeMixedType } = require("../services/questionQualityEngine");
 const { loadTextbook } = require("../services/textbookAdapter");
 
@@ -27,77 +25,47 @@ function normalizeRequestedType(value) {
 
 const generateQuestions = async (req, res) => {
   try {
-    const {
-      subject,
-      topic,
-      level,
-      grade,
-      difficulty,
-      questionType,
-      count,
-    } = req.body;
-
+    const { subject, topic, level, grade, difficulty, questionType, count } = req.body;
     if (!subject || !topic || !(grade || level) || !difficulty || !questionType) {
-      return res.status(400).json({
-        success: false,
-        message: "Subject, topic, grade/level, difficulty and question type are required.",
-      });
+      return res.status(400).json({ success: false, message: "Subject, topic, grade/level, difficulty and question type are required." });
     }
 
     const requestedCount = Math.min(Math.max(Number(count) || 5, 1), 50);
     const normalizedType = normalizeRequestedType(questionType);
     const normalizedGrade = grade || level;
-    const target = {
-      subject,
-      topic,
-      grade: normalizedGrade,
-      level: normalizedGrade,
-      difficulty,
-      questionType: "Multiple Choice",
-      count: Math.min(requestedCount, 20),
-    };
+    const target = { subject, topic, grade: normalizedGrade, level: normalizedGrade, difficulty, questionType: "Multiple Choice", count: Math.min(requestedCount, 50) };
 
-    // Textbooks are optional reference material. Their absence NEVER blocks generation.
     let textbookReference = { available: false };
     try {
       const book = loadTextbook(normalizedGrade, subject);
-      textbookReference = {
-        available: Boolean(book.loaded),
-        file: book.file || null,
-        usedAsReference: Boolean(book.loaded),
-      };
+      textbookReference = { available: Boolean(book.loaded), file: book.file || null, usedAsReference: Boolean(book.loaded), requiresOCR: Boolean(book.requiresOCR) };
     } catch (bookError) {
       console.warn("Optional textbook reference unavailable:", bookError.message);
     }
 
     const questions = [];
     const localSignatures = new Set();
-    const maxRounds = Math.max(10, Math.ceil(requestedCount / 5) * 3);
+    const maxRounds = Math.max(12, Math.ceil(requestedCount / 5) * 4);
 
     for (let round = 0; round < maxRounds && questions.length < requestedCount; round += 1) {
       const remaining = requestedCount - questions.length;
-      const batchSize = Math.min(20, Math.max(remaining, 5));
+      const batchSize = Math.min(50, Math.max(remaining, 5));
       const batch = generateLocalQuestions({ ...target, count: batchSize });
 
       for (const rawQuestion of Array.isArray(batch) ? batch : []) {
         if (questions.length >= requestedCount) break;
         if (!rawQuestion) continue;
-
-        const outputType = normalizedType === "Mixed"
-          ? makeMixedType(questions.length)
-          : normalizedType;
+        const outputType = normalizedType === "Mixed" ? makeMixedType(questions.length) : normalizedType;
         const candidate = transformQuestion(rawQuestion, outputType);
         const validation = validateQuestion(candidate);
         if (!validation.valid) continue;
-
         const key = signature(candidate.question);
         if (localSignatures.has(key) || recentQuestions.has(key)) continue;
-
         localSignatures.add(key);
         rememberSignature(candidate.question);
         questions.push({
           ...candidate,
-          id: candidate.id || signature(candidate.question).slice(0, 16),
+          id: candidate.id || key.slice(0, 16),
           grade: candidate.grade || normalizedGrade,
           level: candidate.level || normalizedGrade,
           subject: candidate.subject || subject,
@@ -110,33 +78,14 @@ const generateQuestions = async (req, res) => {
     }
 
     if (questions.length < requestedCount) {
-      return res.status(422).json({
-        success: false,
-        message: `The generator could only produce ${questions.length} unique high-quality questions for this grade, subject and topic.`,
-        requestedCount,
-        generatedCount: questions.length,
-        questions,
-        textbookReference,
-      });
+      return res.status(422).json({ success: false, message: `The generator could only produce ${questions.length} unique high-quality questions for this grade, subject and topic.`, requestedCount, generatedCount: questions.length, questions, textbookReference });
     }
 
-    return res.status(200).json({
-      success: true,
-      source: "local",
-      count: questions.length,
-      textbookReference,
-      questions,
-    });
+    return res.status(200).json({ success: true, source: "local", count: questions.length, textbookReference, questions });
   } catch (error) {
     console.error("Question generation error:", error);
-
     const status = error.code && String(error.code).startsWith("INVALID_") ? 400 : 500;
-    return res.status(status).json({
-      success: false,
-      message: error.message || "Failed to generate questions.",
-      code: error.code || "GENERATION_ERROR",
-      details: error.details || undefined,
-    });
+    return res.status(status).json({ success: false, message: error.message || "Failed to generate questions.", code: error.code || "GENERATION_ERROR", details: error.details || undefined });
   }
 };
 
