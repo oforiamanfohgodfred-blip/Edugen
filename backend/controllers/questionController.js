@@ -1,141 +1,94 @@
-const {
-  generateQuestions: generateLocalQuestions,
-} = require("../services/questionEngine");
+const { generateQuestions: generateLocalQuestions } = require("../services/stableGenerationEngine");
+const { validateQuestion, signature, transformQuestion, makeMixedType } = require("../services/questionQualityEngine");
+const { loadTextbook } = require("../services/textbookAdapter");
 
-const recentQuestions = [];
+const recentQuestions = new Set();
+const MAX_RECENT = 500;
 
-const normalize = (text) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+function rememberSignature(value) {
+  recentQuestions.add(signature(value));
+  if (recentQuestions.size > MAX_RECENT) {
+    const first = recentQuestions.values().next().value;
+    if (first) recentQuestions.delete(first);
+  }
+}
 
-const isSimilar = (question) => {
-  const current = normalize(question);
-
-  return recentQuestions.some((old) => {
-    const previous = normalize(old);
-
-    if (current === previous) {
-      return true;
-    }
-
-    const currentWords = new Set(current.split(" "));
-    const previousWords = new Set(previous.split(" "));
-
-    let common = 0;
-
-    currentWords.forEach((word) => {
-      if (previousWords.has(word)) {
-        common++;
-      }
-    });
-
-    const similarity =
-      common /
-      Math.max(
-        currentWords.size,
-        previousWords.size
-      );
-
-    return similarity >= 0.82;
-  });
-};
+function normalizeRequestedType(value) {
+  const raw = String(value || "Multiple Choice").trim().toLowerCase();
+  if (raw === "mixed") return "Mixed";
+  if (raw.includes("short")) return "Short Answer";
+  if (raw.includes("problem") && !raw.includes("word")) return "Problem Solving";
+  if (raw.includes("word")) return "Word Problem";
+  if (raw.includes("true") || raw.includes("false")) return "True/False";
+  return "Multiple Choice";
+}
 
 const generateQuestions = async (req, res) => {
   try {
-    const {
-      subject,
-      topic,
-      level,
-      difficulty,
-      questionType,
-      count,
-    } = req.body;
-
-    if (
-      !subject ||
-      !topic ||
-      !level ||
-      !difficulty ||
-      !questionType
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Subject, topic, level, difficulty and question type are required.",
-      });
+    const { subject, topic, level, grade, difficulty, questionType, count } = req.body;
+    if (!subject || !topic || !(grade || level) || !difficulty || !questionType) {
+      return res.status(400).json({ success: false, message: "Subject, topic, grade/level, difficulty and question type are required." });
     }
 
-    const requestedCount = Math.min(
-      Math.max(Number(count) || 5, 1),
-      20
-    );
+    const requestedCount = Math.min(Math.max(Number(count) || 5, 1), 50);
+    const normalizedType = normalizeRequestedType(questionType);
+    const normalizedGrade = grade || level;
 
-    let questions = [];
+    let textbookReference = { available: false };
+    try {
+      const book = loadTextbook(normalizedGrade, subject);
+      textbookReference = {
+        available: Boolean(book && book.loaded),
+        file: book ? book.file || null : null,
+        usedAsReference: Boolean(book && book.loaded),
+        requiresOCR: Boolean(book && book.requiresOCR),
+      };
+    } catch (bookError) {
+      console.warn("Optional textbook reference unavailable:", bookError.message);
+    }
 
-    let attempts = 0;
+    const questions = [];
+    const localSignatures = new Set();
+    const maxRounds = Math.max(12, Math.ceil(requestedCount / 5) * 4);
 
-    while (
-      questions.length < requestedCount &&
-      attempts < 5
-    ) {
-      attempts++;
+    for (let round = 0; round < maxRounds && questions.length < requestedCount; round += 1) {
+      const remaining = requestedCount - questions.length;
+      const batch = generateLocalQuestions({ subject, topic, grade: normalizedGrade, level: normalizedGrade, difficulty, count: remaining });
 
-      const batch = generateLocalQuestions({
-        subject,
-        topic,
-        level,
-        difficulty,
-        questionType,
-        count: requestedCount,
-      });
-
-      for (const question of batch) {
-        if (isSimilar(question.question)) {
-          continue;
-        }
-
-        questions.push(question);
-
-        recentQuestions.push(
-          question.question
-        );
-
-        if (recentQuestions.length > 200) {
-          recentQuestions.shift();
-        }
-
-        if (
-          questions.length >=
-          requestedCount
-        ) {
-          break;
-        }
+      for (const rawQuestion of Array.isArray(batch) ? batch : []) {
+        if (questions.length >= requestedCount || !rawQuestion) break;
+        const outputType = normalizedType === "Mixed" ? makeMixedType(questions.length) : normalizedType;
+        const candidate = transformQuestion(rawQuestion, outputType);
+        const validation = validateQuestion(candidate);
+        if (!validation.valid) continue;
+        const key = signature(candidate.question);
+        if (localSignatures.has(key) || recentQuestions.has(key)) continue;
+        localSignatures.add(key);
+        rememberSignature(candidate.question);
+        questions.push({
+          ...candidate,
+          id: candidate.id || key.slice(0, 16),
+          grade: candidate.grade || normalizedGrade,
+          level: candidate.level || normalizedGrade,
+          subject: candidate.subject || subject,
+          topic: candidate.topic || topic,
+          difficulty: candidate.difficulty || difficulty,
+          qualityChecked: true,
+          textbookReferenceAvailable: textbookReference.available,
+        });
       }
     }
 
-    return res.status(200).json({
-      success: true,
-      source: "local",
-      count: questions.length,
-      questions,
-    });
-  } catch (error) {
-    console.error(
-      "Question generation error:",
-      error
-    );
+    if (questions.length < requestedCount) {
+      return res.status(422).json({ success: false, message: `The generator could only produce ${questions.length} unique high-quality questions for this grade, subject and topic.`, requestedCount, generatedCount: questions.length, questions, textbookReference });
+    }
 
-    return res.status(500).json({
-      success: false,
-      message:
-        "Failed to generate questions.",
-    });
+    return res.status(200).json({ success: true, source: "local", count: questions.length, textbookReference, questions });
+  } catch (error) {
+    console.error("Question generation error:", error);
+    const status = error.code && String(error.code).startsWith("INVALID_") ? 400 : 500;
+    return res.status(status).json({ success: false, message: error.message || "Failed to generate questions.", code: error.code || "GENERATION_ERROR", details: error.details || undefined });
   }
 };
 
-module.exports = {
-  generateQuestions,
-};
+module.exports = { generateQuestions };

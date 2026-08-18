@@ -1,387 +1,317 @@
-
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 
-/*
-=========================================================
-EduGen Safe Engine Upgrade
-=========================================================
-This script is located inside:
-
-backend/services/
-
-Therefore __dirname already points to:
-
-backend/services/
-
-So questionEngine.js is simply:
-
-__dirname/questionEngine.js
-=========================================================
-*/
-
-const enginePath = path.join(
-  __dirname,
-  "questionEngine.js"
-);
-
-const backupPath = path.join(
-  __dirname,
-  "questionEngine.before-upgrade.js"
-);
+const enginePath = path.join(__dirname, "questionEngine.js");
+const backupPath = path.join(__dirname, `questionEngine.before-final-upgrade.${Date.now()}.js`);
 
 console.log("==========================================");
-console.log(" EduGen Safe Engine Upgrade");
+console.log(" EduGen Final Engine Upgrade");
 console.log("==========================================");
-
-/*
-=========================================================
-CHECK ENGINE EXISTS
-=========================================================
-*/
 
 if (!fs.existsSync(enginePath)) {
-  console.error("❌ questionEngine.js was not found.");
-  console.error("");
-  console.error("Expected location:");
-  console.error(enginePath);
+  console.error("❌ questionEngine.js was not found:", enginePath);
   process.exit(1);
 }
 
-console.log("✅ questionEngine.js found.");
-console.log(enginePath);
+const original = fs.readFileSync(enginePath, "utf8");
 
-/*
-=========================================================
-READ ORIGINAL ENGINE
-=========================================================
-*/
-
-const original = fs.readFileSync(
-  enginePath,
-  "utf8"
-);
-
-/*
-=========================================================
-SAFETY CHECKS
-=========================================================
-*/
-
-if (
-  !original.includes("function generateQuestions") ||
-  !original.includes("function convertToProblemSolving") ||
-  !original.includes("function generateMath") ||
-  !original.includes("function generateScience")
-) {
-  console.error(
-    "❌ Safety check failed: expected functions were not found."
-  );
-
-  console.error("");
-  console.error(
-    "No changes were made to questionEngine.js."
-  );
-
-  process.exit(1);
+for (const marker of [
+  "function generateQuestions",
+  "function generateMath",
+  "function generateScience",
+  "function convertQuestion",
+]) {
+  if (!original.includes(marker)) {
+    console.error(`❌ Safety check failed: missing ${marker}`);
+    process.exit(1);
+  }
 }
 
-console.log(
-  "✅ Safety checks passed."
-);
-
-/*
-=========================================================
-BACKUP
-=========================================================
-*/
-
-fs.copyFileSync(
-  enginePath,
-  backupPath
-);
-
-console.log("");
-console.log("✅ Backup created:");
-console.log(backupPath);
-
-/*
-=========================================================
-HELPER
-=========================================================
-*/
-
-function replaceFunction(
-  source,
-  functionName,
-  newFunction
-) {
-  const startPattern =
-    new RegExp(
-      `function\\s+${functionName}\\s*\\(`
-    );
-
-  const match =
-    source.match(startPattern);
-
-  if (!match) {
-    throw new Error(
-      `Function not found: ${functionName}`
-    );
+function replaceSection(source, startMarker, endMarker, replacement) {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start);
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error(`Could not locate section: ${startMarker}`);
   }
-
-  const start =
-    match.index;
-
-  const braceStart =
-    source.indexOf(
-      "{",
-      start
-    );
-
-  if (braceStart === -1) {
-    throw new Error(
-      `Opening brace not found: ${functionName}`
-    );
-  }
-
-  let depth = 0;
-  let end = -1;
-
-  for (
-    let i = braceStart;
-    i < source.length;
-    i++
-  ) {
-    const char =
-      source[i];
-
-    if (char === "{") {
-      depth++;
-    }
-
-    if (char === "}") {
-      depth--;
-
-      if (depth === 0) {
-        end = i + 1;
-        break;
-      }
-    }
-  }
-
-  if (end === -1) {
-    throw new Error(
-      `Could not determine end of function: ${functionName}`
-    );
-  }
-
-  return (
-    source.slice(0, start) +
-    newFunction.trim() +
-    source.slice(end)
-  );
+  return source.slice(0, start) + replacement + source.slice(end);
 }
 
-/*
-=========================================================
-PATCH 1
-PROBLEM SOLVING
-=========================================================
-
-The original answer remains internally stored.
-
-The student receives a clear final-answer instruction.
-
-Options remain empty.
-
-=========================================================
-*/
-
-const newProblemSolving = `
-function convertToProblemSolving(
-  question
-) {
-  return {
-    ...question,
-
-    question:
-      \`PROBLEM SOLVING\\\\n\\\\n\` +
-      \`\${question.question}\\\\n\\\\n\` +
-      \`Solve the problem carefully. You may show your working on paper.\\\\n\\\\n\` +
-      \`FINAL ANSWER: Enter only your final answer below.\`,
-
-    options: [],
-
-    questionType:
-      "Problem Solving",
-  };
+function replaceMainGenerator(source, replacement) {
+  const start = source.indexOf("function generateQuestions({");
+  const exportStart = source.indexOf("module.exports = {", start);
+  if (start === -1 || exportStart === -1) {
+    throw new Error("Could not locate generateQuestions/export boundaries.");
+  }
+  return source.slice(0, start) + replacement + source.slice(exportStart);
 }
+
+function ensureRequire(source, statement, marker = 'const crypto = require("crypto");') {
+  if (source.includes(statement)) return source;
+  if (!source.includes(marker)) throw new Error(`Could not locate ${marker}`);
+  return source.replace(marker, `${marker}\n${statement}`);
+}
+
+const newLevelProfiles = `const levelProfiles = {
+  JHS: {
+    name: "JHS",
+    reasoningDepth: { Easy: 1, Medium: 2, Hard: 3, Expert: 5 },
+    maxSteps: { Easy: 1, Medium: 2, Hard: 3, Expert: 5 },
+    expertStyle: [
+      "multi-step reasoning", "hidden relationships", "careful interpretation",
+      "common-mistake traps", "indirect information", "reverse reasoning",
+    ],
+  },
+  SHS: {
+    name: "SHS",
+    reasoningDepth: { Easy: 1, Medium: 2, Hard: 4, Expert: 6 },
+    maxSteps: { Easy: 1, Medium: 2, Hard: 4, Expert: 6 },
+    expertStyle: [
+      "multi-concept reasoning", "indirect calculation", "algebraic manipulation",
+      "interpretation of data", "common-mistake traps", "reverse reasoning",
+    ],
+  },
+};
+
 `;
 
-/*
-=========================================================
-APPLY PATCHES
-=========================================================
-*/
+const newNormalizeLevel = `function normalizeLevel(level) {
+  const value = String(level || "").trim().toLowerCase();
+  if (value.includes("university") || value.includes("tertiary") || value.includes("undergraduate")) {
+    return "SHS";
+  }
+  if (value.includes("jhs") || value.includes("junior") || value.includes("middle") || value.includes("basic")) {
+    return "JHS";
+  }
+  if (value.includes("shs") || value.includes("senior") || value.includes("high school")) {
+    return "SHS";
+  }
+  return "SHS";
+}
+
+`;
+
+const newConvertQuestion = `function convertToShortAnswer(question) {
+  return {
+    ...question,
+    options: [],
+    questionType: "Short Answer",
+  };
+}
+
+function convertQuestion(question, questionType) {
+  const requested = String(questionType || "Multiple Choice").trim();
+  const type = requested.toLowerCase();
+
+  if (type.includes("mixed")) {
+    const choices = [
+      "Multiple Choice",
+      "Short Answer",
+      "Problem Solving",
+      "True / False",
+      "Word Problems",
+    ];
+    return convertQuestion(question, randomItem(choices));
+  }
+
+  if (type.includes("true") || type.includes("false")) {
+    return convertToTrueFalse(question);
+  }
+  if (type.includes("problem") && !type.includes("word")) {
+    return convertToProblemSolving(question);
+  }
+  if (type.includes("word")) {
+    return convertToWordProblem(question);
+  }
+  if (type.includes("short") || type.includes("answer")) {
+    return convertToShortAnswer(question);
+  }
+
+  return { ...question, questionType: "Multiple Choice" };
+}
+
+`;
+
+const topicMapper = `function mapGeneratorTopic(subject, topic) {
+  const t = String(topic || "").toLowerCase();
+  if (String(subject).toLowerCase() === "mathematics") {
+    if (t.includes("simultaneous")) return "simultaneous equations";
+    if (t.includes("quadratic")) return "quadratic equations";
+    if (t.includes("logarithm")) return "logarithms";
+    if (t.includes("function")) return "functions";
+    if (t.includes("trigon")) return "trigonometry";
+    if (t.includes("sequence") || t.includes("progression") || t.includes("pattern")) return "sequences";
+    if (t.includes("probability") || t.includes("chance")) return "probability";
+    if (t.includes("statistic") || t.includes("data")) return "statistics";
+    if (t.includes("ratio") || t.includes("proportion")) return "ratio";
+    if (t.includes("percent") || t.includes("financial")) return "percentage";
+    if (t.includes("index") || t.includes("indices") || t.includes("surds")) return "indices";
+    if (t.includes("trig")) return "trigonometry";
+    if (t.includes("geometry") || t.includes("shape") || t.includes("angle") || t.includes("pythag") || t.includes("circle") || t.includes("bearing") || t.includes("mensuration") || t.includes("measurement")) return "geometry";
+    if (t.includes("vector")) return "geometry";
+    if (t.includes("algebra") || t.includes("equation") || t.includes("inequal")) return "algebra";
+    if (t.includes("number") || t.includes("fraction") || t.includes("decimal")) return "percentage";
+    return "algebra";
+  }
+  return topic;
+}
+
+`;
+
+const newGenerateQuestions = `function generateQuestions({
+  subject,
+  topic,
+  level,
+  grade,
+  difficulty,
+  questionType,
+  count,
+}) {
+  const requestedCount = Math.min(Math.max(parseInt(count, 10) || 5, 1), 20);
+  const curriculumGrade = grade || level;
+  const validation = validateRequest({ grade: curriculumGrade, subject, topic });
+
+  if (!validation.valid) {
+    const error = new Error(validation.message);
+    error.code = validation.code;
+    error.details = validation;
+    throw error;
+  }
+
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
+  const requestedType = String(questionType || "Multiple Choice").trim();
+  const textbook = getKnowledgeContext({
+    grade: validation.grade,
+    subject: validation.subject,
+    topic: validation.topic,
+  });
+
+  const questions = [];
+  const used = new Set();
+  let attempts = 0;
+  const maxAttempts = Math.max(requestedCount * 300, 750);
+
+  while (questions.length < requestedCount && attempts < maxAttempts) {
+    attempts++;
+
+    let generated;
+    const generatorTopic = mapGeneratorTopic(validation.subject, validation.topic);
+
+    if (validation.subject === "Mathematics") {
+      generated = generateMath(generatorTopic, normalizedDifficulty, validation.academicLevel);
+    } else {
+      generated = generateScience(validation.subject, validation.topic, normalizedDifficulty, validation.academicLevel);
+    }
+
+    if (!generated || !generated.question) continue;
+
+    generated = convertQuestion(generated, requestedType);
+    const normalized = cleanText(generated.question);
+    if (!normalized || used.has(normalized)) continue;
+    used.add(normalized);
+
+    const learningObjective = generated.learningObjective ||
+      (textbook.learningObjectives && textbook.learningObjectives[0]) ||
+      "Apply the relevant concept correctly.";
+
+    questions.push({
+      id: makeId(),
+      subject: validation.subject,
+      topic: validation.topic,
+      grade: validation.grade,
+      level: validation.academicLevel,
+      difficulty: normalizedDifficulty,
+      questionType: generated.questionType || "Multiple Choice",
+      question: generated.question,
+      options: generated.options || [],
+      answer: generated.answer,
+      explanation: generated.explanation || "Review the underlying concept and work through the problem carefully.",
+      learningObjective,
+      textbookGrounded: Boolean(textbook.grounded),
+      textbookSource: textbook.source || null,
+      textbookContext: textbook.context || null,
+    });
+  }
+
+  if (questions.length < requestedCount) {
+    const error = new Error(
+      \`EduGen could only generate \${questions.length} unique question(s) out of \${requestedCount} requested for \${validation.grade} → \${validation.subject} → \${validation.topic} → \${normalizedDifficulty} → \${requestedType}.\`
+    );
+    error.code = "INSUFFICIENT_UNIQUE_QUESTIONS";
+    error.details = {
+      requestedCount,
+      generatedCount: questions.length,
+      attempts,
+      grade: validation.grade,
+      level: validation.academicLevel,
+      subject: validation.subject,
+      topic: validation.topic,
+      difficulty: normalizedDifficulty,
+      questionType: requestedType,
+      textbookAvailable: Boolean(textbook.available),
+    };
+    throw error;
+  }
+
+  return questions;
+}
+
+`;
 
 let updated = original;
 
 try {
-  updated =
-    replaceFunction(
-      updated,
-      "convertToProblemSolving",
-      newProblemSolving
-    );
-} catch (error) {
-  console.error("");
-  console.error(
-    "❌ Patch failed:"
-  );
-  console.error(
-    error.message
-  );
+  fs.copyFileSync(enginePath, backupPath);
+  console.log(`✅ Backup created: ${backupPath}`);
 
-  console.error("");
-  console.error(
-    "Your original questionEngine.js was NOT changed."
-  );
+  updated = ensureRequire(updated, 'const { validateRequest } = require("./curriculumEngine");');
+  updated = ensureRequire(updated, 'const { getKnowledgeContext } = require("./textbookEngine");');
 
-  process.exit(1);
-}
-
-console.log(
-  "✅ Problem-solving patch prepared."
-);
-
-/*
-=========================================================
-WRITE TEMPORARY FILE
-=========================================================
-*/
-
-const tempPath =
-  enginePath + ".upgrade.tmp.js";
-
-try {
-  fs.writeFileSync(
-    tempPath,
+  updated = replaceSection(
     updated,
-    "utf8"
-  );
-} catch (error) {
-  console.error("");
-  console.error(
-    "❌ Could not write temporary file."
-  );
-  console.error(error.message);
-
-  process.exit(1);
-}
-
-console.log(
-  "✅ Patch written to temporary file."
-);
-
-/*
-=========================================================
-SYNTAX CHECK
-=========================================================
-*/
-
-console.log("");
-console.log(
-  "Checking JavaScript syntax..."
-);
-
-try {
-  execFileSync(
-    process.execPath,
-    [
-      "--check",
-      tempPath,
-    ],
-    {
-      stdio: "inherit",
-    }
+    "const levelProfiles = {",
+    "/*\n=========================================================\n NORMALIZE ACADEMIC LEVEL",
+    newLevelProfiles
   );
 
-  console.log(
-    "✅ JavaScript syntax check passed."
-  );
-} catch (error) {
-  console.error("");
-  console.error(
-    "❌ Syntax check failed."
+  updated = replaceSection(
+    updated,
+    "function normalizeLevel(level) {",
+    "/*\n=========================================================\n NORMALIZE DIFFICULTY",
+    newNormalizeLevel
   );
 
-  if (fs.existsSync(tempPath)) {
-    fs.unlinkSync(tempPath);
+  updated = replaceSection(
+    updated,
+    "function convertQuestion(",
+    "/* ========================================================\n   MAIN GENERATOR",
+    newConvertQuestion
+  );
+
+  const insertBeforeGenerate = "function generateQuestions({";
+  if (!updated.includes("function mapGeneratorTopic(")) {
+    updated = updated.replace(insertBeforeGenerate, topicMapper + insertBeforeGenerate);
   }
 
-  console.error("");
-  console.error(
-    "Your original questionEngine.js was NOT changed."
-  );
+  updated = replaceMainGenerator(updated, newGenerateQuestions);
 
-  process.exit(1);
-}
-
-/*
-=========================================================
-FINAL REPLACEMENT
-=========================================================
-*/
-
-try {
-  fs.renameSync(
-    tempPath,
-    enginePath
-  );
+  const tempPath = `${enginePath}.final-upgrade.tmp.js`;
+  fs.writeFileSync(tempPath, updated, "utf8");
+  console.log("🔎 Running JavaScript syntax check...");
+  execFileSync(process.execPath, ["--check", tempPath], { stdio: "inherit" });
+  fs.renameSync(tempPath, enginePath);
+  console.log("✅ questionEngine.js updated successfully.");
 } catch (error) {
-  console.error("");
-  console.error(
-    "❌ Could not replace questionEngine.js."
-  );
-
-  console.error(
-    error.message
-  );
-
-  if (fs.existsSync(tempPath)) {
-    fs.unlinkSync(tempPath);
+  console.error("❌ Final patch failed:", error.message);
+  const tempPath = `${enginePath}.final-upgrade.tmp.js`;
+  if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+  if (fs.existsSync(backupPath)) {
+    fs.copyFileSync(backupPath, enginePath);
+    console.error("↩️ Original engine restored from backup.");
   }
-
-  console.error("");
-  console.error(
-    "Your original questionEngine.js was NOT changed."
-  );
-
   process.exit(1);
 }
 
-/*
-=========================================================
-SUCCESS
-=========================================================
-*/
-
-console.log("");
-console.log(
-  "✅ questionEngine.js updated safely."
-);
-
-console.log("");
 console.log("==========================================");
-console.log(" EduGen patch completed successfully.");
+console.log(" EduGen final patch ready");
 console.log("==========================================");
-
-console.log("");
-console.log("Backup:");
-console.log(backupPath);
-
-console.log("");
-console.log("Updated engine:");
-console.log(enginePath);
