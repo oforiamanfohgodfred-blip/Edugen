@@ -36,13 +36,9 @@ function findMatchingBrace(source, openIndex) {
     }
 
     if (quote) {
-      if (escaped) {
-        escaped = false;
-      } else if (ch === "\\") {
-        escaped = true;
-      } else if (ch === quote) {
-        quote = null;
-      }
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === quote) quote = null;
       continue;
     }
 
@@ -102,10 +98,12 @@ function main() {
 
   try {
     let source = original;
+
     source = ensureRequire(
       source,
       'const { validateRequest, normalizeGrade, normalizeSubject } = require("./curriculumEngine");'
     );
+
     source = ensureRequire(
       source,
       'const { loadLocalTextbook, buildKnowledgeContext } = require("./textbookEngine");'
@@ -127,6 +125,7 @@ function main() {
 
   const normalizedGrade = normalizeGrade(grade || level);
   const normalizedSubject = normalizeSubject(subject);
+
   const validation = validateRequest({
     grade: normalizedGrade,
     subject: normalizedSubject,
@@ -134,7 +133,9 @@ function main() {
   });
 
   if (!validation.valid) {
-    throw new Error(validation.message || "Invalid EduGen curriculum request.");
+    throw new Error(
+      validation.message || "Invalid EduGen curriculum request."
+    );
   }
 
   const questions = [];
@@ -142,24 +143,31 @@ function main() {
   let attempts = 0;
   const maxAttempts = Math.max(requestedCount * 300, 1000);
 
-  // Textbook knowledge is an optional local dependency. If no processed
-  // textbook exists yet, generation continues from the curriculum engine.
-  // Once OCR/text files are supplied, this context becomes available without
-  // changing the question-engine API.
+  // Textbook knowledge is a local dependency when processed books exist.
+  // Until then, generation continues normally from the curriculum/question banks.
   let textbookContext = null;
+
   try {
     const textbook = loadLocalTextbook({
       grade: normalizedGrade,
       subject: normalizedSubject,
     });
-    if (textbook.loaded) {
-      textbookContext = buildKnowledgeContext(textbook.content, topic, topic);
+
+    if (textbook && textbook.loaded) {
+      textbookContext = buildKnowledgeContext(
+        textbook.content,
+        topic,
+        topic
+      );
     }
   } catch (_) {
     textbookContext = null;
   }
 
-  while (questions.length < requestedCount && attempts < maxAttempts) {
+  while (
+    questions.length < requestedCount &&
+    attempts < maxAttempts
+  ) {
     attempts++;
 
     let generated;
@@ -168,7 +176,11 @@ function main() {
       normalizedSubject.toLowerCase() === "mathematics" ||
       normalizedSubject.toLowerCase() === "math"
     ) {
-      generated = generateMath(topic, difficulty, normalizedGrade);
+      generated = generateMath(
+        topic,
+        difficulty,
+        normalizedGrade
+      );
     } else {
       generated = generateScience(
         normalizedSubject,
@@ -180,10 +192,19 @@ function main() {
 
     if (!generated) continue;
 
-    generated = convertQuestion(generated, questionType);
+    generated = convertQuestion(
+      generated,
+      questionType
+    );
 
-    const normalized = cleanText(generated.question);
-    if (!normalized || used.has(normalized)) continue;
+    const normalized = cleanText(
+      generated.question
+    );
+
+    if (!normalized || used.has(normalized)) {
+      continue;
+    }
+
     used.add(normalized);
 
     questions.push({
@@ -194,7 +215,9 @@ function main() {
       grade: normalizedGrade,
       difficulty,
       questionType:
-        generated.questionType || questionType || "Multiple Choice",
+        generated.questionType ||
+        questionType ||
+        "Multiple Choice",
       question: generated.question,
       options: generated.options || [],
       answer: generated.answer,
@@ -210,22 +233,49 @@ function main() {
   }
 
   if (questions.length !== requestedCount) {
-    throw new Error(
-      `Unable to generate the requested ${requestedCount} unique questions for ${normalizedGrade} ${normalizedSubject} / ${topic}. Generated ${questions.length}.`
-    );
+    const message =
+      "Unable to generate the requested " +
+      requestedCount +
+      " unique questions for " +
+      normalizedGrade +
+      " " +
+      normalizedSubject +
+      " / " +
+      topic +
+      ". Generated " +
+      questions.length +
+      ".";
+
+    throw new Error(message);
   }
 
   return questions;
 }`;
 
-    source = replaceFunction(source, "generateQuestions", newGenerateQuestions);
+    source = replaceFunction(
+      source,
+      "generateQuestions",
+      newGenerateQuestions
+    );
 
     const exportMarker = "module.exports = {";
     const exportStart = source.lastIndexOf(exportMarker);
-    if (exportStart === -1) throw new Error("Could not locate module.exports");
+
+    if (exportStart === -1) {
+      throw new Error("Could not locate module.exports");
+    }
+
     const exportOpen = source.indexOf("{", exportStart);
-    const exportClose = findMatchingBrace(source, exportOpen);
-    if (exportClose === -1) throw new Error("Could not locate module.exports closing brace");
+    const exportClose = findMatchingBrace(
+      source,
+      exportOpen
+    );
+
+    if (exportClose === -1) {
+      throw new Error(
+        "Could not locate module.exports closing brace"
+      );
+    }
 
     source =
       source.slice(0, exportStart) +
@@ -233,27 +283,51 @@ function main() {
       source.slice(exportClose + 1);
 
     const tempPath = `${enginePath}.tmp`;
-    fs.writeFileSync(tempPath, source, "utf8");
 
-    cp.execFileSync(process.execPath, ["--check", tempPath], {
-      stdio: "inherit",
-    });
+    fs.writeFileSync(
+      tempPath,
+      source,
+      "utf8"
+    );
 
-    fs.renameSync(tempPath, enginePath);
+    cp.execFileSync(
+      process.execPath,
+      ["--check", tempPath],
+      { stdio: "inherit" }
+    );
+
+    fs.renameSync(
+      tempPath,
+      enginePath
+    );
+
     console.log("==========================================");
     console.log(" EduGen QUESTION ENGINE V2 UPGRADE");
     console.log("==========================================");
     console.log("Backup:", backupPath);
     console.log("Curriculum validation: ENABLED");
-    console.log("Textbook dependency: ENABLED (optional until books are ready)");
+    console.log(
+      "Textbook dependency: ENABLED (optional until books are ready)"
+    );
     console.log("Requested-count enforcement: ENABLED");
     console.log("Duplicate protection: ENABLED");
     console.log("Syntax check: PASSED");
     console.log("ENGINE UPGRADE COMPLETE");
   } catch (error) {
-    fs.writeFileSync(enginePath, original, "utf8");
-    console.error("❌ V2 patch failed:", error.message);
-    console.error("↩️ Original engine restored.");
+    fs.writeFileSync(
+      enginePath,
+      original,
+      "utf8"
+    );
+
+    console.error(
+      "❌ V2 patch failed:",
+      error.message
+    );
+    console.error(
+      "↩️ Original engine restored."
+    );
+
     process.exitCode = 1;
   }
 }
