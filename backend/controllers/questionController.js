@@ -3,15 +3,27 @@ const { generateExpertQuestion } = require("../services/expertQuestionEngineV2")
 const { validateQuestion, signature, transformQuestion, makeMixedType } = require("../services/questionQualityEngine");
 const { loadTextbook } = require("../services/textbookAdapter");
 
-const recentQuestions = new Set();
-const MAX_RECENT = 500;
+// Keep a bounded memory of recent questions, but scope it by curriculum request.
+// This prevents one previous test from exhausting a small topic's expert pool.
+const recentQuestions = new Map();
+const MAX_RECENT_PER_SCOPE = 80;
 
-function rememberSignature(value) {
-  recentQuestions.add(signature(value));
-  if (recentQuestions.size > MAX_RECENT) {
-    const first = recentQuestions.values().next().value;
-    if (first) recentQuestions.delete(first);
+function scopeKey(subject, grade, topic, difficulty) {
+  return [subject, grade, topic, difficulty].map(v => String(v || "").trim().toLowerCase()).join("|");
+}
+
+function rememberSignature(scope, value) {
+  if (!recentQuestions.has(scope)) recentQuestions.set(scope, new Set());
+  const set = recentQuestions.get(scope);
+  set.add(signature(value));
+  while (set.size > MAX_RECENT_PER_SCOPE) {
+    const first = set.values().next().value;
+    if (first) set.delete(first); else break;
   }
+}
+
+function hasRecentSignature(scope, value) {
+  return Boolean(recentQuestions.get(scope)?.has(signature(value)));
 }
 
 function normalizeRequestedType(value) {
@@ -35,6 +47,7 @@ const generateQuestions = async (req, res) => {
     const normalizedType = normalizeRequestedType(questionType);
     const normalizedGrade = grade || level;
     const isExpert = String(difficulty).trim().toLowerCase() === "expert";
+    const scope = scopeKey(subject, normalizedGrade, topic, difficulty);
 
     let textbookReference = { available: false };
     try {
@@ -51,7 +64,9 @@ const generateQuestions = async (req, res) => {
 
     const questions = [];
     const localSignatures = new Set();
-    const maxRounds = Math.max(30, Math.ceil(requestedCount / 5) * 10);
+    const maxRounds = isExpert
+      ? Math.max(80, requestedCount * 30)
+      : Math.max(30, Math.ceil(requestedCount / 5) * 10);
     let variationIndex = 0;
 
     for (let round = 0; round < maxRounds && questions.length < requestedCount; round += 1) {
@@ -59,8 +74,10 @@ const generateQuestions = async (req, res) => {
       let batch = [];
 
       if (isExpert) {
-        const batchSize = Math.min(remaining, 10);
-        for (let i = 0; i < batchSize; i += 1) {
+        // Generate one candidate at a time so variationIndex keeps advancing even
+        // when a candidate is rejected. This is important for difficult topics.
+        const attemptsThisRound = Math.min(Math.max(remaining * 2, 4), 20);
+        for (let i = 0; i < attemptsThisRound; i += 1) {
           try {
             batch.push(generateExpertQuestion({
               subject,
@@ -73,14 +90,18 @@ const generateQuestions = async (req, res) => {
           }
         }
       } else {
-        batch = generateLocalQuestions({
-          subject,
-          topic,
-          grade: normalizedGrade,
-          level: normalizedGrade,
-          difficulty,
-          count: remaining,
-        });
+        try {
+          batch = generateLocalQuestions({
+            subject,
+            topic,
+            grade: normalizedGrade,
+            level: normalizedGrade,
+            difficulty,
+            count: remaining,
+          });
+        } catch (localError) {
+          return res.status(422).json({ success: false, message: localError.message || "Unable to generate the requested questions." });
+        }
       }
 
       for (const rawQuestion of Array.isArray(batch) ? batch : []) {
@@ -89,10 +110,17 @@ const generateQuestions = async (req, res) => {
         const candidate = transformQuestion(rawQuestion, outputType);
         const validation = validateQuestion(candidate);
         if (!validation.valid) continue;
+
         const key = signature(candidate.question);
-        if (localSignatures.has(key) || recentQuestions.has(key)) continue;
+        if (localSignatures.has(key)) continue;
+
+        // For Expert, allow the engine to reach deeper variation indexes before
+        // declaring a request exhausted. Previous tests should not permanently
+        // consume the entire small family pool.
+        if (hasRecentSignature(scope, candidate.question) && variationIndex < 200) continue;
+
         localSignatures.add(key);
-        rememberSignature(candidate.question);
+        rememberSignature(scope, candidate.question);
         questions.push({
           ...candidate,
           id: candidate.id || key.slice(0, 16),
