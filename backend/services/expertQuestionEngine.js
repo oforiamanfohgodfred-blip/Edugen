@@ -1,167 +1,62 @@
-/* =========================================================
-   EduGen EXPERT REASONING ENGINE
-   ---------------------------------------------------------
-   Expert is deliberately different from ordinary difficulty.
-   Every Expert question must require:
-   1) identifying the governing idea,
-   2) connecting at least two pieces of evidence/logic,
-   3) evaluating a consequence, exception, or alternative,
-   4) selecting the final conclusion.
-
-   This layer is concept-first, not number-first, and works
-   without textbooks. Textbooks can later improve grounding.
-========================================================= */
-
+/* EduGen Expert Reasoning Engine
+   Expert questions are concept-first, multi-step and transfer-based.
+   They must require analysis of a real situation, not merely larger numbers. */
 const crypto = require("crypto");
+const id = () => crypto.randomBytes(8).toString("hex");
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const q = ({ subject, grade, topic, question, answer, distractors, explanation, family }) => ({
+  id: id(), subject, grade, level: grade, topic, difficulty: "Expert",
+  questionFamily: `expert-${family}`, questionType: "Multiple Choice", question,
+  options: [answer, ...distractors].sort(() => Math.random() - 0.5),
+  answer, correctAnswer: answer, explanation,
+  learningObjective: `Analyze, connect and evaluate ideas in ${topic}.`,
+  reasoningSteps: 3, expertReasoning: true,
+});
 
-const makeId = () => crypto.randomBytes(8).toString("hex");
-const pick = (items) => items[Math.floor(Math.random() * items.length)];
-
-function makeQuestion({ subject, grade, topic, question, answer, distractors, family, explanation, objective }) {
-  return {
-    id: makeId(),
-    subject,
-    grade,
-    level: grade,
-    topic,
-    difficulty: "Expert",
-    questionFamily: `expert-${family}`,
-    questionType: "Multiple Choice",
-    question,
-    options: [answer, ...distractors],
-    answer,
-    correctAnswer: answer,
-    explanation,
-    learningObjective: objective || `Analyse, connect and evaluate ideas in ${topic}.`,
-    reasoningSteps: 3,
-    expertReasoning: true,
-  };
+function math(grade, topic) {
+  const t = String(topic).toLowerCase();
+  if (t.includes("real number")) {
+    return pick([
+      q({subject:"Mathematics",grade,topic,family:"counterexample",question:"A student claims that the sum of any two irrational numbers is irrational. Which response most decisively evaluates the claim?",answer:"Give a counterexample such as √2 + (−√2) = 0, then explain that irrational numbers are not closed under addition.",distractors:["Accept the claim because both addends are irrational.","Test one positive pair and treat the result as a proof.","Say the claim is true because every real number is either rational or irrational."],explanation:"A single valid counterexample disproves a universal statement. Here the irrational terms cancel to a rational result."}),
+      q({subject:"Mathematics",grade,topic,family:"proof-conditions",question:"A proof about real numbers uses division by an expression containing x. A student obtains a result and then includes the value that makes the divisor zero. What should an expert conclude?",answer:"That value must be excluded from the original domain before accepting the solution.",distractors:["It must be included because it appeared during algebra.","It can be included if the final equation looks correct.","Division by zero is allowed when the original expression is real."],explanation:"A division step is only valid when its divisor is nonzero. The original domain controls the admissible solutions."}),
+      q({subject:"Mathematics",grade,topic,family:"representation",question:"Two equivalent-looking forms of a real-number expression behave differently at one boundary value. What should be checked before declaring them equivalent for all real inputs?",answer:"Check the domains and every restriction introduced or removed by the algebraic transformation.",distractors:["Choose the form with fewer symbols.","Check only one ordinary numerical example.","Assume algebraic simplification always preserves every boundary case."],explanation:"Equivalent expressions must agree on the relevant domain. Cancellation, roots and division can create restrictions."})
+    ]);
+  }
+  if (t.includes("probability")) return q({subject:"Mathematics",grade,topic,family:"conditional-probability",question:"A rare disease is screened using a highly accurate test. A patient receives a positive result. Why is it incorrect to conclude immediately that the patient is highly likely to have the disease?",answer:"The base rate must be combined with the test's false-positive and true-positive rates to find the probability of disease given a positive result.",distractors:["Test accuracy and probability of disease are always the same quantity.","A rare condition can be ignored once the test is accurate.","A positive result logically proves the condition is present."],explanation:"P(positive|disease) is not the same as P(disease|positive). The prevalence of the condition affects the latter."});
+  if (t.includes("statistics") || t.includes("data")) return q({subject:"Mathematics",grade,topic,family:"distribution-analysis",question:"Two schools have identical mean examination scores. School A has tightly clustered results while School B has a few very high and very low results. Which conclusion is best justified?",answer:"The equal means do not imply equal performance patterns; variability and distribution must also be compared.",distractors:["The schools perform identically because their means match.","School B must have a higher mean because it has extreme values.","The mean becomes meaningless whenever data vary."],explanation:"A mean describes central tendency but does not describe spread or distribution shape."});
+  if (t.includes("quadratic") || t.includes("equation") || t.includes("algebra")) return q({subject:"Mathematics",grade,topic,family:"solution-validation",question:"A student squares both sides of an equation and obtains two solutions. What must happen before both are accepted?",answer:"Substitute both candidates into the original equation because squaring can introduce an extraneous solution.",distractors:["Accept both because the squared equation produced them.","Keep the larger solution only.","Check the candidates only in the squared equation."],explanation:"Squaring is not always reversible. Verification in the original equation protects against extraneous roots."});
+  if (t.includes("sequence") || t.includes("series")) return q({subject:"Mathematics",grade,topic,family:"pattern-proof",question:"Several initial terms of a sequence fit an arithmetic pattern, but another rule can also produce those same terms. What is the strongest conclusion?",answer:"The available terms do not uniquely determine the rule; an additional definition, condition or term is needed.",distractors:["The simplest visible pattern is automatically unique.","The next term is always determined by the first two terms.","Any rule matching the first terms is equally intended."],explanation:"Finite data can fit multiple rules. A sequence needs a defining rule or additional information to be uniquely specified."});
+  if (t.includes("geometry") || t.includes("mensuration") || t.includes("coordinate") || t.includes("vector")) return q({subject:"Mathematics",grade,topic,family:"diagram-assumptions",question:"A geometric diagram appears to show two equal angles, but the equality is not stated or proved. Which action is mathematically valid?",answer:"Do not use the apparent equality until it follows from the stated conditions or a proved theorem.",distractors:["Use it because the diagram was drawn to scale.","Measure the picture and treat the measurement as exact.","Assume every visually symmetric feature is a condition."],explanation:"A diagram illustrates a problem but does not automatically supply unstated geometric conditions."});
+  return q({subject:"Mathematics",grade,topic,family:"transfer",question:`A non-routine ${topic} problem gives two plausible methods. One relies on a familiar rule with an unstated condition; the other starts from definitions. What should an expert do?`,answer:"Identify and verify the assumptions of the familiar rule, then use the method whose conditions are actually satisfied.",distractors:["Use the familiar rule because it is shorter.","Choose whichever method gives an answer first.","Ignore the conditions because both methods concern the same topic."],explanation:"Expert mathematical reasoning selects methods by validity and assumptions, not appearance or speed."});
 }
 
-const mathTemplates = [
-  ({ topic, grade }) => makeQuestion({
-    subject: "Mathematics", grade, topic, family: "proof-and-counterexample",
-    question: `An advanced learner claims that a rule discovered while working with ${topic} must work in both directions. Before accepting the claim, you must identify the rule, determine which assumptions made the original direction valid, and then test whether reversing the logic preserves those assumptions. Which conclusion is mathematically strongest?`,
-    answer: "The reverse statement is valid only when its necessary conditions have also been established.",
-    distractors: ["A statement is reversible whenever it works for several examples.", "A reverse statement is always true because the original statement was proved.", "A reverse statement can be accepted without checking the original assumptions."],
-    explanation: `Expert reasoning in ${topic} requires separating a valid implication from its converse and checking the conditions that make the reasoning work.`,
-  }),
-  ({ topic, grade }) => makeQuestion({
-    subject: "Mathematics", grade, topic, family: "error-analysis",
-    question: `Two students solve a difficult ${topic} problem. Student A reaches a plausible result by applying a familiar rule immediately. Student B first identifies the structure of the problem, states the condition under which the rule is valid, applies it, and then checks the result against the original conditions. Which approach gives the stronger mathematical justification?`,
-    answer: "Student B, because the method is justified by conditions and verified against the original problem.",
-    distractors: ["Student A, because a familiar rule never needs its conditions checked.", "Both methods are equally justified whenever the final answer looks reasonable.", "Neither method is useful because mathematical answers cannot be checked."],
-    explanation: `A high-level solution to ${topic} must justify the method and verify that its assumptions still hold.`,
-  }),
-  ({ topic, grade }) => makeQuestion({
-    subject: "Mathematics", grade, topic, family: "structural-reasoning",
-    question: `A problem in ${topic} is changed so that one defining condition is removed while all visible surface features remain similar. You must identify the defining condition, predict which part of the original argument depends on it, and decide whether the original conclusion survives. What should an expert do first?`,
-    answer: "Identify the condition that supports the original conclusion before attempting to reuse the method.",
-    distractors: ["Reuse the original method because the problem still looks similar.", "Ignore the changed condition and compare only the final answers.", "Assume every theorem remains valid after one of its conditions is removed."],
-    explanation: `Expert mathematics focuses on structure and conditions rather than surface similarity.`,
-  }),
-  ({ topic, grade }) => makeQuestion({
-    subject: "Mathematics", grade, topic, family: "multiple-representations",
-    question: `A difficult ${topic} problem can be represented in two different mathematical forms. Form A makes the relationship visible, while Form B makes computation or manipulation easier. An expert must translate between the forms, preserve the meaning, and use the form that exposes the decisive relationship. Which principle is being applied?`,
-    answer: "Equivalent representations can reveal different structure, so the best representation depends on the reasoning task.",
-    distractors: ["Different representations always describe different mathematical objects.", "The longest representation is automatically the most rigorous.", "Changing representation changes the underlying mathematical truth."],
-    explanation: `Strong mathematical reasoning moves between equivalent representations to expose structure and reduce hidden assumptions.`,
-  }),
-  ({ topic, grade }) => makeQuestion({
-    subject: "Mathematics", grade, topic, family: "strategy-selection",
-    question: `You are given a non-routine ${topic} problem. Method A is shorter but works only under a special condition. Method B is longer but follows directly from definitions and remains valid under the stated conditions. After identifying the conditions and checking the target, which strategy is safest?`,
-    answer: "Use Method B unless the special condition required by Method A has been proved for the problem.",
-    distractors: ["Always use Method A because shorter methods are better.", "Use whichever method produces an answer first, without checking conditions.", "Choose randomly because equivalent methods never have different assumptions."],
-    explanation: `Expert problem solving chooses methods by validity and assumptions, not by apparent speed alone.`,
-  }),
-];
-
-const scienceTemplates = {
-  "Integrated Science": [
-    ({ topic, grade }) => makeQuestion({
-      subject: "Integrated Science", grade, topic, family: "systems-cause-effect",
-      question: `A community changes one practice related to ${topic}. At first, one observable change appears beneficial, but a second change emerges later. To reason correctly, you must identify the initial cause, trace the intermediate effect, and then evaluate the secondary consequence. Which approach gives the strongest scientific conclusion?`,
-      answer: "Trace the causal chain and compare the evidence for both the immediate and secondary effects before judging the intervention.",
-      distractors: ["Judge the intervention only from the first visible effect.", "Assume the later effect is unrelated because it appeared later.", "Choose the explanation that sounds most familiar without comparing evidence."],
-      explanation: `Complex ${topic} problems require systems thinking: cause, intermediate mechanism, consequence, and evidence must be considered together.`,
-    }),
-    ({ topic, grade }) => makeQuestion({
-      subject: "Integrated Science", grade, topic, family: "investigation-design",
-      question: `A learner investigates a claim about ${topic} and obtains an unexpected result. Before repeating the investigation, the learner must identify the claim, determine which variable could explain the result, control competing explanations, and decide what observation would distinguish the possibilities. What is the best next step?`,
-      answer: "Design a controlled follow-up investigation that isolates the most plausible competing explanation.",
-      distractors: ["Discard the unexpected result because it conflicts with the prediction.", "Change several variables at once to see whether anything changes.", "Repeat the exact procedure without considering possible alternative explanations."],
-      explanation: `Scientific investigation becomes stronger when unexpected evidence leads to a controlled test of competing explanations.`,
-    }),
-  ],
-  Physics: [
-    ({ topic, grade }) => makeQuestion({
-      subject: "Physics", grade, topic, family: "model-evaluation",
-      question: `A model is used to explain an observation involving ${topic}. The model correctly predicts the first observation but fails when one condition is changed. An expert must identify the model's assumption, determine why the changed condition matters, and decide whether the model should be modified or replaced. What is the strongest conclusion?`,
-      answer: "The model is limited by an assumption that no longer holds, so the changed condition must be incorporated before the prediction can be trusted.",
-      distractors: ["The model must always be correct because it worked once.", "The new observation should be ignored because it contradicts the model.", "Changing one condition can never affect a physical model."],
-      explanation: `Physics models are useful within stated assumptions; expert reasoning tests those assumptions when conditions change.`,
-    }),
-    ({ topic, grade }) => makeQuestion({
-      subject: "Physics", grade, topic, family: "mechanism-chain",
-      question: `During an investigation of ${topic}, observation A changes, which affects quantity B, which then changes the final behaviour. To avoid a superficial answer, identify the physical law governing A→B, connect B to the final behaviour, and check whether an alternative mechanism could produce the same observation. Which conclusion is strongest?`,
-      answer: "The explanation should name the governing relationship, connect the intermediate effect to the outcome, and rule out plausible alternatives with evidence.",
-      distractors: ["Name only the final effect and assume the mechanism is obvious.", "Choose the first possible mechanism without checking alternatives.", "Use an unrelated physical quantity because it also changes during the experiment."],
-      explanation: `Expert physics explanations require a causal mechanism rather than a description of the final observation alone.`,
-    }),
-  ],
-  Chemistry: [
-    ({ topic, grade }) => makeQuestion({
-      subject: "Chemistry", grade, topic, family: "microscopic-macroscopic",
-      question: `A chemical system involving ${topic} shows a visible change after one condition is altered. An expert must connect the macroscopic observation to particle-level behaviour, determine which interaction or process changed, and then predict what should happen if the condition is reversed. Which reasoning is strongest?`,
-      answer: "Explain the particle-level change first, use it to account for the observation, and then use the same mechanism to predict the reverse condition.",
-      distractors: ["Describe the colour or appearance without explaining the particles involved.", "Assume the reverse condition must produce the exact opposite result without analysing the mechanism.", "Explain the observation using a property that is unrelated to the reacting particles."],
-      explanation: `Chemistry becomes deeper when macroscopic evidence is connected to particle-level structure and interactions.`,
-    }),
-    ({ topic, grade }) => makeQuestion({
-      subject: "Chemistry", grade, topic, family: "competing-explanations",
-      question: `Two explanations are proposed for an observation in ${topic}. Explanation A fits the initial observation but conflicts with a second piece of evidence. Explanation B explains both observations but requires a less familiar mechanism. What should an expert choose?`,
-      answer: "Prefer Explanation B if it consistently accounts for all reliable evidence and its mechanism is chemically justified.",
-      distractors: ["Prefer A because familiar explanations are automatically better.", "Prefer the explanation with the simpler wording regardless of evidence.", "Treat both explanations as equally strong even when one conflicts with evidence."],
-      explanation: `Scientific explanations are judged by how well they account for the complete evidence, not by familiarity.`,
-    }),
-  ],
-  Biology: [
-    ({ topic, grade }) => makeQuestion({
-      subject: "Biology", grade, topic, family: "homeostasis-and-feedback",
-      question: `An organism experiences a disturbance involving ${topic}. The first response reduces the disturbance, but a second response is required to restore normal function. An expert must identify the stimulus, receptor or sensing process, response pathway, and final effect. Which description best represents the reasoning?`,
-      answer: "The response should be explained as a linked regulatory pathway in which the detected change triggers mechanisms that reduce the disturbance.",
-      distractors: ["The response is simply a single event with no regulatory feedback.", "The final effect can be explained without identifying what changed first.", "Any response that occurs after the disturbance must be positive feedback."],
-      explanation: `Complex biological regulation is best understood as a sequence linking stimulus, detection, response and restoration.`,
-    }),
-    ({ topic, grade }) => makeQuestion({
-      subject: "Biology", grade, topic, family: "evidence-and-inference",
-      question: `A study of ${topic} finds that two groups show different outcomes. Before claiming that one factor caused the difference, an expert must compare the groups, identify possible confounding variables, and determine what additional evidence would separate correlation from causation. What is the strongest conclusion?`,
-      answer: "The difference supports an association, but causation requires controlling plausible confounding factors or obtaining stronger experimental evidence.",
-      distractors: ["Any association automatically proves causation.", "A difference between groups is meaningless because biology cannot be investigated experimentally.", "The most convenient explanation should be accepted without checking confounding factors."],
-      explanation: `Expert biology distinguishes observation from causal inference and actively tests alternative explanations.`,
-    }),
-  ],
-};
-
-function genericExpertScience(subject, grade, topic) {
-  return makeQuestion({
-    subject, grade, topic, family: "transfer-and-evaluation",
-    question: `A new situation is presented in ${topic}. You must first identify the governing principle, connect it to the evidence provided, consider what would change if one condition were altered, and then evaluate the competing explanations. Which response demonstrates expert scientific reasoning?`,
-    answer: `Use the governing principle to explain the evidence, test the important assumptions, and justify the final conclusion against plausible alternatives.`,
-    distractors: [
-      "Select the explanation that matches the first observation without testing alternatives.",
-      "Ignore assumptions and treat a single observation as conclusive proof.",
-      "Describe the result without explaining the mechanism or evidence.",
-    ],
-    explanation: `Expert reasoning in ${topic} requires mechanism, evidence, assumptions and evaluation rather than recall alone.`,
-  });
+function science(subject, grade, topic) {
+  const t = String(topic).toLowerCase();
+  if (subject === "Physics") {
+    if (t.includes("force") || t.includes("motion")) return q({subject,grade,topic,family:"mechanics",question:"A passenger moves forward relative to a bus when the bus brakes suddenly. Which explanation correctly connects the observation to the governing principle?",answer:"The passenger's inertia tends to maintain the previous motion while the bus slows; an external interaction such as a seatbelt is needed to change the passenger's motion.",distractors:["Inertia is a forward force that pushes the passenger.","The passenger gains forward acceleration because braking creates motion.","Mass itself acts as a force in the forward direction."],explanation:"Inertia is resistance to a change in motion, not a force. The restraint or another interaction supplies the force that changes the motion."});
+    if (t.includes("electric") || t.includes("circuit")) return q({subject,grade,topic,family:"circuits",question:"Two identical lamps are connected first in series and then in parallel to the same source. Why can their brightness change between the arrangements?",answer:"The circuit arrangement changes the current and potential difference available to each lamp, so the power delivered to each lamp changes.",distractors:["Parallel connections remove resistance from the lamps completely.","Series connections always give each lamp the full source voltage.","Brightness depends only on the number of lamps, not circuit arrangement."],explanation:"Series and parallel topologies impose different current and voltage relationships, changing electrical power and therefore brightness."});
+    if (t.includes("energy") || t.includes("work") || t.includes("power")) return q({subject,grade,topic,family:"energy-efficiency",question:"Two machines perform the same useful task. Machine A requires more input energy and releases more waste heat than Machine B. What conclusion follows?",answer:"Machine B is more efficient because a larger fraction of its input energy becomes useful output.",distractors:["Machine A is more efficient because it releases more heat.","Both machines have equal efficiency because the useful task is identical.","Efficiency depends only on how quickly the task is completed."],explanation:"Efficiency is the useful output divided by total input. Waste energy lowers the useful fraction."});
+  }
+  if (subject === "Chemistry") {
+    if (t.includes("atomic") || t.includes("periodic")) return q({subject,grade,topic,family:"electron-structure",question:"Two elements have similar chemical behaviour even though their nuclei contain different numbers of particles. What should be compared first?",answer:"Their electron arrangements, especially their valence electrons, because bonding behaviour depends strongly on the outer electrons.",distractors:["Only their neutron numbers.","Only their total nuclear mass.","The physical size of the samples."],explanation:"Chemical behaviour is strongly influenced by electron configuration and the electrons available for bonding."});
+    if (t.includes("bond") || t.includes("structure")) return q({subject,grade,topic,family:"particle-model",question:"A substance conducts electricity when molten but not when solid. Which explanation accounts for both observations?",answer:"Its charged particles are held in fixed positions in the solid but become mobile when molten.",distractors:["Melting creates new electric charge from nothing.","Atoms become charged only after they are heated.","Solid substances cannot contain charged particles."],explanation:"In an ionic substance the ions exist in both states, but only in the molten state can they move and carry charge."});
+    if (t.includes("acid") || t.includes("base") || t.includes("ph")) return q({subject,grade,topic,family:"acid-base-analysis",question:"A solution's pH changes after another solution is added. Why does that observation alone not prove that the added solution is a strong acid?",answer:"The pH change depends on concentration, volume, buffering and the original solution as well as acid strength.",distractors:["A strong acid can never change pH.","Any large pH change proves strong acid strength.","Concentration has no effect on pH changes."],explanation:"Acid strength and concentration are different concepts, and mixture conditions affect the observed pH."});
+  }
+  if (subject === "Biology") {
+    if (t.includes("genetic") || t.includes("inherit") || t.includes("dna")) return q({subject,grade,topic,family:"inheritance",question:"A trait appears in an offspring even though neither parent shows the trait. Which explanation should be considered before assuming a new mutation?",answer:"Both parents may carry a recessive allele and the offspring may inherit the allele combination needed to express it.",distractors:["Traits can appear without genetic information.","A dominant allele is always hidden in both parents.","The environment automatically creates the trait's allele."],explanation:"A recessive phenotype can appear when unaffected carrier parents each pass on the relevant allele."});
+    if (t.includes("ecosystem") || t.includes("ecology") || t.includes("population")) return q({subject,grade,topic,family:"ecosystem-feedback",question:"A predator population falls, prey numbers rise, vegetation declines, and soil quality later deteriorates. Which explanation best links the observations?",answer:"Predator loss can cause a trophic cascade: increased herbivory reduces vegetation and can indirectly alter soil processes.",distractors:["Predators directly create soil nutrients.","The soil decline proves that predators are plants.","Population changes cannot affect abiotic conditions."],explanation:"The observations form a connected food-web chain rather than unrelated events."});
+    if (t.includes("cell") || t.includes("respiration") || t.includes("photosynthesis")) return q({subject,grade,topic,family:"physiology",question:"A plant's growth decreases after one environmental factor changes, while several internal processes also change. What should an expert conclude?",answer:"The changed factor may affect growth through one or more intermediate physiological processes, so the mechanism must be investigated.",distractors:["The changed factor directly controls every cell.","The correlation proves the exact mechanism.","Growth is unrelated to physiological processes."],explanation:"Correlation can identify a relationship but does not by itself establish the pathway or mechanism."});
+  }
+  if (subject === "Integrated Science") {
+    if (t.includes("ecosystem") || t.includes("ecology") || t.includes("food")) return q({subject,grade,topic,family:"systems",question:"A community removes a major predator. Herbivore numbers rise, vegetation declines, and a later change appears in soil quality. Which reasoning best explains the chain?",answer:"Predator removal can trigger a trophic cascade that changes herbivory, vegetation and downstream nutrient processes.",distractors:["Predators directly manufacture soil nutrients.","The vegetation decline proves sunlight stopped reaching the soil.","Population changes cannot influence ecosystem processes."],explanation:"The strongest explanation connects each observation through interactions in the ecosystem."});
+    if (t.includes("cell") || t.includes("microscope")) return q({subject,grade,topic,family:"controlled-investigation",question:"Two cells placed in apparently similar solutions show different changes. What should be compared before concluding that the cells have different biological responses?",answer:"Compare cell type, membrane properties, solution concentration and other experimental conditions before assigning a cause.",distractors:["Assume the solutions have identical concentrations because they look alike.","Conclude that osmosis cannot explain either result.","Assume one cell has no membrane."],explanation:"Controlled comparisons must establish that the relevant conditions are actually equivalent."});
+  }
+  return q({subject,grade,topic,family:"investigation",question:`An investigation into ${topic} gives an unexpected result and two explanations fit the first observation. What should an expert do next?`,answer:"Identify a prediction on which the explanations disagree and design a controlled test that can distinguish them.",distractors:["Choose the explanation that sounds most familiar.","Treat the first observation as proof.","Ignore the conflicting evidence."],explanation:"Expert science separates observation from explanation and uses discriminating evidence to test competing hypotheses."});
 }
 
 function generateExpertQuestion({ subject, grade, topic }) {
-  if (subject === "Mathematics") return pick(mathTemplates)({ subject, grade, topic });
-  const templates = scienceTemplates[subject];
-  if (templates && templates.length) return pick(templates)({ subject, grade, topic });
-  return genericExpertScience(subject, grade, topic);
+  if (subject === "Mathematics") return math(grade, topic);
+  return science(subject, grade, topic);
 }
 
 module.exports = { generateExpertQuestion };
