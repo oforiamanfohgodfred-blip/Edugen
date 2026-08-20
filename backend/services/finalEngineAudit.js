@@ -1,21 +1,15 @@
-/*
-  EduGen FINAL ENGINE AUDIT
-  Run from backend:
-    node services/finalEngineAudit.js
-
-  This is a diagnostic only. It does not modify generation state.
-*/
+/* EduGen FINAL ENGINE AUDIT */
 const { generateExpertQuestion } = require("./expertQuestionEngineV2");
 const curriculum = require("./curriculumEngine");
 const quality = require("./questionQualityEngine");
 
-const cases = [
-  ["JHS1", "Mathematics", "Real Numbers"],
-  ["JHS2", "Integrated Science", "Cells"],
-  ["SHS1", "Mathematics", "Real Numbers"],
-  ["SHS1", "Physics", "Mechanics"],
-  ["SHS1", "Chemistry", "Atomic Structure"],
-  ["SHS1", "Biology", "Cell Structure and Function"],
+const requested = [
+  ["JHS1", "Mathematics"],
+  ["JHS2", "Integrated Science"],
+  ["SHS1", "Mathematics"],
+  ["SHS1", "Physics"],
+  ["SHS1", "Chemistry"],
+  ["SHS1", "Biology"],
 ];
 
 let failed = 0;
@@ -23,28 +17,21 @@ console.log("==========================================");
 console.log(" EduGen FINAL ENGINE AUDIT");
 console.log("==========================================");
 
-for (const [grade, subject, topic] of cases) {
-  const check = curriculum.validateRequest({ grade, subject, topic });
-  if (!check.valid) {
-    console.log(`SKIP: ${grade} ${subject} / ${topic} -> ${check.message}`);
-    continue;
-  }
-
+for (const [grade, subject] of requested) {
+  const topics = curriculum.getTopicsForSubject(grade, subject);
+  const topic = topics[0];
+  if (!topic) { console.log(`FAIL: ${grade} ${subject} has no configured topics`); failed += 1; continue; }
   const questions = [];
   const signatures = new Set();
-  for (let i = 0; i < 12; i += 1) {
+  for (let i = 0; i < 20 && questions.length < 5; i += 1) {
     const q = generateExpertQuestion({ subject, grade, topic, variationIndex: i });
     const validation = quality.validateQuestion(q);
     const sig = quality.signature(q.question);
-    if (validation.valid && !signatures.has(sig)) {
-      signatures.add(sig);
-      questions.push(q);
-    }
+    if (validation.valid && !signatures.has(sig)) { signatures.add(sig); questions.push(q); }
   }
-
-  const uniqueFamilies = new Set(questions.map(q => q.questionFamily));
-  const ok = questions.length >= 5 && uniqueFamilies.size >= Math.min(3, questions.length) && questions.every(q => Number(q.reasoningSteps) >= 4);
-  console.log(`${ok ? "PASS" : "FAIL"}: ${grade} ${subject} / ${topic} -> ${questions.length} unique, ${uniqueFamilies.size} reasoning families`);
+  const families = new Set(questions.map(q => q.questionFamily));
+  const ok = questions.length >= 5 && families.size >= 5 && questions.every(q => Number(q.reasoningSteps) >= 4);
+  console.log(`${ok ? "PASS" : "FAIL"}: ${grade} ${subject} / ${topic} -> ${questions.length} unique, ${families.size} reasoning families`);
   if (!ok) failed += 1;
 }
 
