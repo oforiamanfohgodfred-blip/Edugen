@@ -1,5 +1,6 @@
 /* EduGen FINAL ENGINE AUDIT */
 const { generateExpertQuestion } = require("./expertQuestionEngineV2");
+const { generateExpertPhysicsQuestion } = require("./expertPhysicsExtension");
 const curriculum = require("./curriculumEngine");
 const quality = require("./questionQualityEngine");
 
@@ -23,8 +24,9 @@ for (const [grade, subject] of requested) {
   if (!topic) { console.log(`FAIL: ${grade} ${subject} has no configured topics`); failed += 1; continue; }
   const questions = [];
   const signatures = new Set();
+  const generator = subject === "Physics" ? generateExpertPhysicsQuestion : generateExpertQuestion;
   for (let i = 0; i < 20 && questions.length < 5; i += 1) {
-    const q = generateExpertQuestion({ subject, grade, topic, variationIndex: i });
+    const q = generator({ subject, grade, topic, variationIndex: i });
     const validation = quality.validateQuestion(q);
     const sig = quality.signature(q.question);
     if (validation.valid && !signatures.has(sig)) { signatures.add(sig); questions.push(q); }
